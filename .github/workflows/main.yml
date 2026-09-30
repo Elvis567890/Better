@@ -1,4 +1,4 @@
-name: BOAT bootstrap
+name: BOAT bootstrap 1 - core
 
 on:
   workflow_dispatch:
@@ -12,20 +12,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write all BOAT files
+      - name: Write core files
         run: |
-          set -e
-          mkdir -p boat/tools boat/triggers .github/workflows
+          mkdir -p boat/tools boat/triggers
 
-          cat > requirements.txt <<'BOAT_FILE_END'
+          cat > requirements.txt <<'EOF'
           httpx>=0.27
           playwright>=1.44
           fastapi>=0.111
           uvicorn>=0.30
           python-multipart>=0.0.9
-          BOAT_FILE_END
+          EOF
 
-          cat > .env.example <<'BOAT_FILE_END'
+          cat > .env.example <<'EOF'
           BOAT_LLM_BASE=https://api.openai.com/v1
           BOAT_LLM_KEY=sk-...
           BOAT_LLM_MODEL=gpt-4o-mini
@@ -40,13 +39,13 @@ jobs:
           TWILIO_TOKEN=
           TWILIO_WA_FROM=+1...
           BOAT_DAILY_GOAL=10
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/__init__.py <<'BOAT_FILE_END'
-          # BOAT package.
-          BOAT_FILE_END
+          cat > boat/__init__.py <<'EOF'
+          # BOAT package
+          EOF
 
-          cat > boat/memory.py <<'BOAT_FILE_END'
+          cat > boat/memory.py <<'EOF'
           import json, os, sqlite3, time
 
           SCHEMA = """
@@ -114,13 +113,13 @@ jobs:
                       "lessons": [{"kind": l[0], "text": l[1]} for l in lessons],
                       "money_today_total": self.money_today(),
                   }
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/planner.py <<'BOAT_FILE_END'
+          cat > boat/planner.py <<'EOF'
           import json, os, re
           import httpx
 
-          SYSTEM = """You are BOAT — an autonomous hustler agent.
+          SYSTEM = """You are BOAT - an autonomous hustler agent.
           Rules:
           1. ZERO-COST and MONEY-TODAY beat future money.
           2. Never wait on a human. If a step needs a human, pick another step.
@@ -193,13 +192,13 @@ jobs:
           Command: "{command}"
           Failed approach: {json.dumps(mission)[:3500]}
           Tools: {json.dumps([t["name"] for t in tools])}
-          Plan A made no money today. Invent Plan B — a DIFFERENT path that pays TODAY at zero cost.
+          Plan A made no money today. Invent Plan B - a DIFFERENT path that pays TODAY at zero cost.
           Return JSON: {{"plan_name":"...","steps":[{{"tool":"...","args":{{}},"why":"..."}}]}}
           """}]
                   return self._json(await self._chat(msg))
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/brain.py <<'BOAT_FILE_END'
+          cat > boat/brain.py <<'EOF'
           import asyncio, json, logging, os, time, uuid
 
           from .memory import Memory
@@ -220,7 +219,7 @@ jobs:
               async def handle(self, command, source="github", reply_to=None):
                   mid = uuid.uuid4().hex[:10]
                   self.memory.create_mission(mid, command, source)
-                  await self._say(reply_to, f"BOAT engaged — {command} (mission {mid})")
+                  await self._say(reply_to, f"BOAT engaged - {command} (mission {mid})")
 
                   mission = {"id": mid, "command": command, "steps_done": [],
                              "pivots": 0, "money_today": self.memory.money_today(),
@@ -244,7 +243,7 @@ jobs:
                   except Exception as e:
                       return self._finish(mid, "planning_failed", {"error": str(e)}, reply_to)
                   plan = decision.get("steps", [])[:BATCH]
-                  await self._say(reply_to, f"Plan: {decision.get('plan_name','default')} — {len(plan)} steps.")
+                  await self._say(reply_to, f"Plan: {decision.get('plan_name','default')} - {len(plan)} steps.")
 
                   results_all = []
                   for it in range(MAX_ITER):
@@ -350,9 +349,9 @@ jobs:
                   return json.loads(s if len(s) <= n else s[:n] + '..."')
               except Exception:
                   return str(r)[:n]
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/run_once.py <<'BOAT_FILE_END'
+          cat > boat/run_once.py <<'EOF'
           import asyncio, os
           from .brain import Boat
 
@@ -363,9 +362,9 @@ jobs:
 
           if __name__ == "__main__":
               main()
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/__init__.py <<'BOAT_FILE_END'
+          cat > boat/tools/__init__.py <<'EOF'
           import inspect
 
           REGISTRY = {}
@@ -392,9 +391,9 @@ jobs:
           def load_all():
               from . import (shell_tool, browser_tool, phone_tool, gmail_tool,
                              momo_tool, github_tool, social_tool, telegram_tool)
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/shell_tool.py <<'BOAT_FILE_END'
+          cat > boat/tools/shell_tool.py <<'EOF'
           import asyncio, os
           from . import tool
 
@@ -413,9 +412,9 @@ jobs:
               return {"ok": proc.returncode == 0, "code": proc.returncode,
                       "stdout": out.decode(errors="ignore")[:8000],
                       "stderr": err.decode(errors="ignore")[:4000]}
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/browser_tool.py <<'BOAT_FILE_END'
+          cat > boat/tools/browser_tool.py <<'EOF'
           from . import tool
 
           @tool("browser.open", "Open a URL headless and return visible text + links.",
@@ -452,9 +451,9 @@ jobs:
                   final = pg.url; text = (await pg.inner_text("body"))[:3000]
                   await b.close()
                   return {"ok": True, "final_url": final, "text": text}
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/phone_tool.py <<'BOAT_FILE_END'
+          cat > boat/tools/phone_tool.py <<'EOF'
           import asyncio
           from . import tool
 
@@ -489,9 +488,9 @@ jobs:
               msgs = [dict(p.split("=",1) for p in line.split(",") if "=" in p)
                       for line in out.splitlines() if "body=" in line]
               return {"count": len(msgs), "messages": msgs[-limit:], "stderr": err[:300]}
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/gmail_tool.py <<'BOAT_FILE_END'
+          cat > boat/tools/gmail_tool.py <<'EOF'
           import asyncio, email, imaplib, os, re
           from . import tool
 
@@ -536,13 +535,13 @@ jobs:
               for m in msgs:
                   blob = f"{m.get('subject','')} {m.get('snippet','')}".lower()
                   if re.search(hints, blob):
-                      amounts = re.findall(r"(?:usd|ksh|kes|ugx|\$|EUR|GBP)\s?([0-9][0-9,\.]*)", blob)
+                      amounts = re.findall(r"(?:usd|ksh|kes|ugx|[$]|EUR|GBP)\s?([0-9][0-9,.]*)", blob)
                       hits.append({"from": m["from"], "subject": m["subject"],
                                    "amounts": amounts, "snippet": m["snippet"][:200]})
               return {"hits": hits[:20], "scanned": len(msgs)}
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/momo_tool.py <<'BOAT_FILE_END'
+          cat > boat/tools/momo_tool.py <<'EOF'
           import os, time, httpx
           from . import tool
 
@@ -569,9 +568,9 @@ jobs:
                   r = await c.get(f"{base}/collection/v1_0/requesttopay/{ref}",
                                   headers={"Ocp-Apim-Subscription-Key": sub})
                   return {"ok": r.status_code == 200, "ref": ref, "body": r.text[:2000], "ts": time.time()}
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/github_tool.py <<'BOAT_FILE_END'
+          cat > boat/tools/github_tool.py <<'EOF'
           import base64, os, httpx
           from . import tool
 
@@ -581,7 +580,7 @@ jobs:
               return {"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
                       "Accept": "application/vnd.github+json"}
 
-          @tool("github.push_file", "Create or update a file in a GitHub repo (triggers CI).",
+          @tool("github.push_file", "Create or update a file in a GitHub repo.",
                 {"type":"object","properties":{"repo":{"type":"string"}, "path":{"type":"string"},
                                                "content":{"type":"string"},
                                                "message":{"type":"string","default":"boat: update"},
@@ -608,9 +607,9 @@ jobs:
                   r = await c.post(f"{API}/repos/{repo}/actions/workflows/{workflow}/dispatches",
                                    json={"ref": ref, "inputs": inputs or {}})
                   return {"ok": r.status_code == 204, "status": r.status_code}
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/social_tool.py <<'BOAT_FILE_END'
+          cat > boat/tools/social_tool.py <<'EOF'
           import os, httpx
           from . import tool
 
@@ -634,9 +633,9 @@ jobs:
                                    auth=(sid, tok),
                                    data={"From": f"whatsapp:{frm}", "To": f"whatsapp:{to}", "Body": body})
                   return {"ok": r.status_code in (200,201), "body": r.text[:400]}
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/tools/telegram_tool.py <<'BOAT_FILE_END'
+          cat > boat/tools/telegram_tool.py <<'EOF'
           import os, httpx
           from . import tool
 
@@ -662,13 +661,13 @@ jobs:
                                        data={"chat_id": chat_id, "caption": caption},
                                        files={"document": f})
                   return {"ok": r.status_code == 200, "body": r.text[:300]}
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/triggers/__init__.py <<'BOAT_FILE_END'
-          # BOAT triggers package.
-          BOAT_FILE_END
+          cat > boat/triggers/__init__.py <<'EOF'
+          # BOAT triggers package
+          EOF
 
-          cat > boat/triggers/telegram_trigger.py <<'BOAT_FILE_END'
+          cat > boat/triggers/telegram_trigger.py <<'EOF'
           import asyncio, logging, os
           import httpx
           from ..brain import Boat
@@ -706,9 +705,9 @@ jobs:
                       except Exception as e:
                           log.exception("telegram poll error: %s", e)
                           await asyncio.sleep(3)
-          BOAT_FILE_END
+          EOF
 
-          cat > boat/triggers/whatsapp_trigger.py <<'BOAT_FILE_END'
+          cat > boat/triggers/whatsapp_trigger.py <<'EOF'
           import asyncio, os
           from fastapi import FastAPI, Form
           from ..brain import Boat
@@ -724,256 +723,16 @@ jobs:
                   asyncio.create_task(boat.handle(cmd or "make money anywhere today",
                                                   source="whatsapp", reply_to=From))
               return {"ok": True}
-          BOAT_FILE_END
+          EOF
 
-          cat > .github/workflows/boat-brain.yml <<'BOAT_FILE_END'
-          name: BOAT brain
+          echo "Core files written:"
+          find boat -type f | sort
+          ls -1 requirements.txt .env.example
 
-          on:
-            workflow_dispatch:
-              inputs:
-                command:
-                  description: "Boat, do ..."
-                  required: true
-                  default: "make money anywhere today"
-                chat_id:
-                  description: "Telegram chat_id to reply to"
-                  required: false
-            repository_dispatch:
-              types: [boat-command]
-
-          permissions:
-            contents: write
-            actions: write
-
-          concurrency:
-            group: boat-brain
-            cancel-in-progress: false
-
-          jobs:
-            think:
-              runs-on: ubuntu-latest
-              timeout-minutes: 30
-              steps:
-                - uses: actions/checkout@v4
-                  with: { fetch-depth: 1 }
-                - uses: actions/setup-python@v5
-                  with: { python-version: "3.11", cache: pip }
-                - run: pip install -r requirements.txt
-                - run: python -m playwright install --with-deps chromium
-
-                - name: Resolve command
-                  id: cmd
-                  run: |
-                    CMD="${{ github.event.inputs.command || github.event.client_payload.command || 'make money anywhere today' }}"
-                    CHAT="${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}"
-                    echo "command=$CMD" >> "$GITHUB_OUTPUT"
-                    echo "chat_id=$CHAT" >> "$GITHUB_OUTPUT"
-
-                - name: Run BOAT
-                  env:
-                    BOAT_LLM_BASE:        ${{ secrets.BOAT_LLM_BASE }}
-                    BOAT_LLM_KEY:         ${{ secrets.BOAT_LLM_KEY }}
-                    BOAT_LLM_MODEL:       ${{ secrets.BOAT_LLM_MODEL }}
-                    TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
-                    TELEGRAM_ALLOWED:     ${{ secrets.TELEGRAM_ALLOWED }}
-                    GITHUB_TOKEN:         ${{ secrets.BOAT_GH_TOKEN }}
-                    GMAIL_USER:           ${{ secrets.GMAIL_USER }}
-                    GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
-                    MOMO_BASE_URL:        ${{ secrets.MOMO_BASE_URL }}
-                    MOMO_SUBSCRIPTION_KEY: ${{ secrets.MOMO_SUBSCRIPTION_KEY }}
-                    TWILIO_SID:           ${{ secrets.TWILIO_SID }}
-                    TWILIO_TOKEN:         ${{ secrets.TWILIO_TOKEN }}
-                    TWILIO_WA_FROM:       ${{ secrets.TWILIO_WA_FROM }}
-                    BOAT_DAILY_GOAL:      "10"
-                    BOAT_CMD:             ${{ steps.cmd.outputs.command }}
-                    BOAT_CHAT:            ${{ steps.cmd.outputs.chat_id }}
-                  run: python -m boat.run_once
-
-                - name: Commit memory (boat.db)
-                  if: always()
-                  run: |
-                    git config user.name  "boat-bot"
-                    git config user.email "boat@users.noreply.github.com"
-                    git add -f boat.db 2>/dev/null || true
-                    git diff --cached --quiet || git commit -m "boat: memory @ $(date -u +%FT%TZ) [${{ steps.cmd.outputs.command }}]"
-                    git push || true
-          BOAT_FILE_END
-
-          cat > .github/workflows/boat-trigger.yml <<'BOAT_FILE_END'
-          name: BOAT trigger
-
-          on:
-            schedule:
-              - cron: "*/5 * * * *"
-            workflow_dispatch:
-
-          permissions:
-            contents: write
-            actions: write
-
-          concurrency:
-            group: boat-trigger
-            cancel-in-progress: false
-
-          jobs:
-            poll:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@v4
-
-                - name: Read offset + poll Telegram
-                  env:
-                    TG_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
-                    TG_ALLOWED: ${{ secrets.TELEGRAM_ALLOWED }}
-                  run: |
-                    mkdir -p .boat
-                    OFFSET=0; [ -f .boat/tg_offset ] && OFFSET=$(cat .boat/tg_offset)
-                    curl -s "https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${OFFSET}&timeout=0" -o updates.json
-                    python - <<'PY'
-                    import json, os, pathlib
-                    data = json.load(open("updates.json"))
-                    allowed = set(filter(None, os.environ.get("TG_ALLOWED","").split(",")))
-                    last, cmds = 0, []
-                    for u in data.get("result", []):
-                        last = max(last, u["update_id"])
-                        msg = u.get("message") or u.get("channel_post") or {}
-                        text = (msg.get("text") or "").strip()
-                        chat = str((msg.get("chat") or {}).get("id") or "")
-                        if not text or not chat: continue
-                        if allowed and chat not in allowed: continue
-                        low = text.lower()
-                        if not low.startswith("boat"): continue
-                        cmd = text.split(",",1)[1].strip() if "," in text else text[4:].strip()
-                        cmds.append({"cmd": cmd or "make money anywhere today", "chat": chat})
-                    pathlib.Path(".boat/tg_offset").write_text(str(last + 1))
-                    pathlib.Path(".boat/commands.json").write_text(json.dumps(cmds))
-                    print(f"found {len(cmds)} commands")
-                    PY
-
-                - name: Dispatch brain per command
-                  env:
-                    GH_TOKEN: ${{ secrets.BOAT_GH_TOKEN }}
-                  run: |
-                    python - <<'PY'
-                    import json, os, subprocess
-                    cmds = json.load(open(".boat/commands.json"))
-                    repo = os.environ["GITHUB_REPOSITORY"]
-                    for c in cmds:
-                        subprocess.run(
-                            ["gh","workflow","run","boat-brain.yml","-R", repo,
-                             "-f", f"command={c['cmd']}", "-f", f"chat_id={c['chat']}"],
-                            check=False,
-                        )
-                    PY
-
-                - name: Persist offset
-                  run: |
-                    git config user.name  "boat-bot"
-                    git config user.email "boat@users.noreply.github.com"
-                    git add .boat/tg_offset
-                    git diff --cached --quiet || git commit -m "boat: tg offset"
-                    git push || true
-          BOAT_FILE_END
-
-          cat > .github/workflows/boat-selfdrive.yml <<'BOAT_FILE_END'
-          name: BOAT self-drive
-
-          on:
-            schedule:
-              - cron: "0 */4 * * *"
-            workflow_dispatch:
-
-          permissions:
-            contents: write
-            actions: write
-
-          concurrency:
-            group: boat-brain
-            cancel-in-progress: false
-
-          jobs:
-            drive:
-              runs-on: ubuntu-latest
-              steps:
-                - name: Dispatch a self-drive brain run
-                  env:
-                    GH_TOKEN: ${{ secrets.BOAT_GH_TOKEN }}
-                  run: |
-                    gh workflow run boat-brain.yml -R "$GITHUB_REPOSITORY" \
-                       -f "command=make money anywhere today (self-drive)"
-          BOAT_FILE_END
-
-          cat > .github/workflows/boat-build-apk.yml <<'BOAT_FILE_END'
-          name: BOAT build APK
-
-          on:
-            workflow_dispatch:
-              inputs:
-                app_dir:      { required: true,  default: "app" }
-                app_name:     { required: false, default: "BoatApp" }
-                package_name: { required: false, default: "com.boat.app" }
-                chat_id:      { required: true }
-            repository_dispatch:
-              types: [boat-build-apk]
-
-          permissions:
-            contents: read
-
-          jobs:
-            build:
-              runs-on: ubuntu-latest
-              timeout-minutes: 30
-              steps:
-                - uses: actions/checkout@v4
-
-                - uses: actions/setup-java@v4
-                  with: { distribution: temurin, java-version: "17" }
-
-                - name: Flutter build (if pubspec.yaml)
-                  if: ${{ hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != '' }}
-                  uses: subosito/flutter-action@v2
-                  with: { channel: stable }
-
-                - name: flutter build
-                  if: ${{ hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != '' }}
-                  working-directory: ${{ inputs.app_dir }}
-                  run: |
-                    flutter pub get
-                    flutter build apk --release \
-                      --dart-define=APP_NAME="${{ inputs.app_name }}" \
-                      --dart-define=PACKAGE_NAME="${{ inputs.package_name }}"
-
-                - name: Gradle build (if build.gradle)
-                  if: ${{ hashFiles(format('{0}/build.gradle', inputs.app_dir)) != '' }}
-                  working-directory: ${{ inputs.app_dir }}
-                  run: ./gradlew assembleRelease
-
-                - name: Locate APK
-                  id: apk
-                  run: echo "path=$(find . -name '*.apk' -type f | head -n1)" >> "$GITHUB_OUTPUT"
-
-                - name: Send to Telegram
-                  env:
-                    TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-                    CHAT:  ${{ inputs.chat_id || github.event.client_payload.chat_id }}
-                  run: |
-                    curl -s -F chat_id="$CHAT" \
-                         -F caption="${{ inputs.app_name }} — built by BOAT in the cloud" \
-                         -F document=@"${{ steps.apk.outputs.path }}" \
-                         "https://api.telegram.org/bot${TOKEN}/sendDocument"
-          BOAT_FILE_END
-
-          echo "All BOAT files written."
-
-      - name: Commit everything
+      - name: Commit core
         run: |
           git config user.name  "boat-bot"
           git config user.email "boat@users.noreply.github.com"
           git add -A
-          if git diff --cached --quiet; then
-            echo "Nothing to commit."
-          else
-            git commit -m "boat: bootstrap all files"
-            git push
-          fi
+          git diff --cached --quiet || git commit -m "boat: bootstrap core"
+          git push
