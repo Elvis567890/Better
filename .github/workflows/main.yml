@@ -1,346 +1,55 @@
-name: BOAT bootstrap 2 - workflows
+name: BOAT build APK
 
 on:
   workflow_dispatch:
+    inputs:
+      app_dir:      { required: true,  default: "app" }
+      app_name:     { required: false, default: "BoatApp" }
+      package_name: { required: false, default: "com.boat.app" }
+      chat_id:      { required: true }
 
 permissions:
-  contents: write
-
-concurrency:
-  group: boat-bootstrap-2
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  write:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Write workflow files (placeholder)
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+
+      - name: Flutter setup
+        if: hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != ''
+        uses: subosito/flutter-action@v2
+        with: { channel: stable }
+
+      - name: flutter build
+        if: hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != ''
+        working-directory: ${{ inputs.app_dir }}
         run: |
-          mkdir -p .github/workflows
+          flutter pub get
+          flutter build apk --release \
+            --dart-define=APP_NAME="${{ inputs.app_name }}" \
+            --dart-define=PACKAGE_NAME="${{ inputs.package_name }}"
 
-          cat > .github/workflows/boat-brain.yml <<'BOAT_EOF'
-          name: BOAT brain
+      - name: Gradle build
+        if: hashFiles(format('{0}/build.gradle', inputs.app_dir)) != ''
+        working-directory: ${{ inputs.app_dir }}
+        run: ./gradlew assembleRelease
 
-          on:
-            workflow_dispatch:
-              inputs:
-                command:
-                  description: "Boat, do ..."
-                  required: true
-                  default: "make money anywhere today"
-                chat_id:
-                  description: "Telegram chat_id"
-                  required: false
-            repository_dispatch:
-              types: [boat-command]
+      - name: Locate APK
+        id: apk
+        run: echo "path=$(find . -name '*.apk' -type f | head -n1)" >> "$GITHUB_OUTPUT"
 
-          permissions:
-            contents: write
-            actions: write
-
-          concurrency:
-            group: boat-brain
-            cancel-in-progress: false
-
-          jobs:
-            think:
-              runs-on: ubuntu-latest
-              timeout-minutes: 30
-              steps:
-                - uses: actions/checkout@v4
-                  with: { fetch-depth: 0 }
-                - uses: actions/setup-python@v5
-                  with: { python-version: "3.11", cache: pip }
-                - run: pip install -r requirements.txt
-                - run: python -m playwright install --with-deps chromium
-
-                - name: Resolve command
-                  id: cmd
-                  run: |
-                    CMD="__OPEN__ github.event.inputs.command || github.event.client_payload.command || 'make money anywhere today' }}"
-                    CHAT="__OPEN__ github.event.inputs.chat_id || github.event.client_payload.chat_id }}"
-                    echo "command=$CMD" >> "$GITHUB_OUTPUT"
-                    echo "chat_id=$CHAT" >> "$GITHUB_OUTPUT"
-
-                - name: Run BOAT
-                  env:
-                    BOAT_LLM_BASE:        __OPEN__ secrets.BOAT_LLM_BASE }}
-                    BOAT_LLM_KEY:         __OPEN__ secrets.BOAT_LLM_KEY }}
-                    BOAT_LLM_MODEL:       __OPEN__ secrets.BOAT_LLM_MODEL }}
-                    TELEGRAM_BOT_TOKEN:   __OPEN__ secrets.TELEGRAM_BOT_TOKEN }}
-                    TELEGRAM_ALLOWED:     __OPEN__ secrets.TELEGRAM_ALLOWED }}
-                    GITHUB_TOKEN:         __OPEN__ secrets.BOAT_GH_TOKEN }}
-                    GMAIL_USER:           __OPEN__ secrets.GMAIL_USER }}
-                    GMAIL_APP_PASSWORD:   __OPEN__ secrets.GMAIL_APP_PASSWORD }}
-                    MOMO_BASE_URL:        __OPEN__ secrets.MOMO_BASE_URL }}
-                    MOMO_SUBSCRIPTION_KEY: __OPEN__ secrets.MOMO_SUBSCRIPTION_KEY }}
-                    TWILIO_SID:           __OPEN__ secrets.TWILIO_SID }}
-                    TWILIO_TOKEN:         __OPEN__ secrets.TWILIO_TOKEN }}
-                    TWILIO_WA_FROM:       __OPEN__ secrets.TWILIO_WA_FROM }}
-                    BOAT_DAILY_GOAL:      "10"
-                    BOAT_CMD:             __OPEN__ steps.cmd.outputs.command }}
-                    BOAT_CHAT:            __OPEN__ steps.cmd.outputs.chat_id }}
-                  run: python -m boat.run_once
-
-                - name: Commit memory (race-safe)
-                  if: always()
-                  run: |
-                    set -e
-                    [ -f boat.db ] || { echo "no boat.db"; exit 0; }
-                    cp boat.db /tmp/boat.db
-                    git fetch origin "${GITHUB_REF_NAME:-main}" --depth=1
-                    git reset --hard "origin/${GITHUB_REF_NAME:-main}"
-                    cp /tmp/boat.db boat.db
-                    git config user.name  "boat-bot"
-                    git config user.email "boat@users.noreply.github.com"
-                    git add -f boat.db
-                    if git diff --cached --quiet; then
-                      echo "no memory change"
-                    else
-                      git commit -m "boat: memory"
-                      git push origin "HEAD:${GITHUB_REF_NAME:-main}"
-                    fi
-          BOAT_EOF
-
-          cat > .github/workflows/boat-trigger.yml <<'BOAT_EOF'
-          name: BOAT trigger
-
-          on:
-            schedule:
-              - cron: "*/5 * * * *"
-            workflow_dispatch:
-
-          permissions:
-            contents: write
-            actions: write
-
-          concurrency:
-            group: boat-trigger
-            cancel-in-progress: false
-
-          jobs:
-            poll:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@v4
-                  with: { fetch-depth: 0 }
-
-                - name: Read offset + poll Telegram
-                  env:
-                    TG_TOKEN:   __OPEN__ secrets.TELEGRAM_BOT_TOKEN }}
-                    TG_ALLOWED: __OPEN__ secrets.TELEGRAM_ALLOWED }}
-                  run: |
-                    mkdir -p .boat
-                    OFFSET=0; [ -f .boat/tg_offset ] && OFFSET=$(cat .boat/tg_offset)
-                    curl -s "https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${OFFSET}&timeout=0" -o updates.json
-                    python - <<'PY'
-                    import json, os, pathlib
-                    data = json.load(open("updates.json"))
-                    allowed = set(filter(None, os.environ.get("TG_ALLOWED","").split(",")))
-                    last, cmds = 0, []
-                    for u in data.get("result", []):
-                        last = max(last, u["update_id"])
-                        msg = u.get("message") or u.get("channel_post") or {}
-                        text = (msg.get("text") or "").strip()
-                        chat = str((msg.get("chat") or {}).get("id") or "")
-                        if not text or not chat: continue
-                        if allowed and chat not in allowed: continue
-                        low = text.lower()
-                        if not low.startswith("boat"): continue
-                        cmd = text.split(",",1)[1].strip() if "," in text else text[4:].strip()
-                        cmds.append({"cmd": cmd or "make money anywhere today", "chat": chat})
-                    pathlib.Path(".boat/tg_offset").write_text(str(last + 1))
-                    pathlib.Path(".boat/commands.json").write_text(json.dumps(cmds))
-                    print(f"found {len(cmds)} commands")
-                    PY
-
-                - name: Dispatch brain per command
-                  env:
-                    GH_TOKEN: __OPEN__ secrets.BOAT_GH_TOKEN }}
-                  run: |
-                    python - <<'PY'
-                    import json, os, subprocess
-                    cmds = json.load(open(".boat/commands.json"))
-                    repo = os.environ["GITHUB_REPOSITORY"]
-                    for c in cmds:
-                        subprocess.run(
-                            ["gh","workflow","run","boat-brain.yml","-R", repo,
-                             "-f", f"command={c['cmd']}", "-f", f"chat_id={c['chat']}"],
-                            check=False,
-                        )
-                    PY
-
-                - name: Persist offset (race-safe)
-                  run: |
-                    set -e
-                    [ -f .boat/tg_offset ] || { echo "no offset"; exit 0; }
-                    cp .boat/tg_offset /tmp/tg_offset
-                    git fetch origin "${GITHUB_REF_NAME:-main}" --depth=1
-                    git reset --hard "origin/${GITHUB_REF_NAME:-main}"
-                    mkdir -p .boat
-                    cp /tmp/tg_offset .boat/tg_offset
-                    git config user.name  "boat-bot"
-                    git config user.email "boat@users.noreply.github.com"
-                    git add .boat/tg_offset
-                    if git diff --cached --quiet; then
-                      echo "no offset change"
-                    else
-                      git commit -m "boat: tg offset"
-                      git push origin "HEAD:${GITHUB_REF_NAME:-main}"
-                    fi
-          BOAT_EOF
-
-          cat > .github/workflows/boat-selfdrive.yml <<'BOAT_EOF'
-          name: BOAT self-drive
-
-          on:
-            schedule:
-              - cron: "0 */4 * * *"
-            workflow_dispatch:
-
-          permissions:
-            contents: write
-            actions: write
-
-          concurrency:
-            group: boat-brain
-            cancel-in-progress: false
-
-          jobs:
-            drive:
-              runs-on: ubuntu-latest
-              steps:
-                - name: Dispatch a self-drive brain run
-                  env:
-                    GH_TOKEN: __OPEN__ secrets.BOAT_GH_TOKEN }}
-                  run: |
-                    gh workflow run boat-brain.yml -R "$GITHUB_REPOSITORY" \
-                       -f "command=make money anywhere today (self-drive)"
-          BOAT_EOF
-
-          cat > .github/workflows/boat-build-apk.yml <<'BOAT_EOF'
-          name: BOAT build APK
-
-          on:
-            workflow_dispatch:
-              inputs:
-                app_dir:      { required: true,  default: "app" }
-                app_name:     { required: false, default: "BoatApp" }
-                package_name: { required: false, default: "com.boat.app" }
-                chat_id:      { required: true }
-            repository_dispatch:
-              types: [boat-build-apk]
-
-          permissions:
-            contents: read
-
-          jobs:
-            build:
-              runs-on: ubuntu-latest
-              timeout-minutes: 30
-              steps:
-                - uses: actions/checkout@v4
-
-                - uses: actions/setup-java@v4
-                  with: { distribution: temurin, java-version: "17" }
-
-                - name: Flutter setup
-                  if: __OPEN__ hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != '' }}
-                  uses: subosito/flutter-action@v2
-                  with: { channel: stable }
-
-                - name: flutter build
-                  if: __OPEN__ hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != '' }}
-                  working-directory: __OPEN__ inputs.app_dir }}
-                  run: |
-                    flutter pub get
-                    flutter build apk --release \
-                      --dart-define=APP_NAME="__OPEN__ inputs.app_name }}" \
-                      --dart-define=PACKAGE_NAME="__OPEN__ inputs.package_name }}"
-
-                - name: Gradle build
-                  if: __OPEN__ hashFiles(format('{0}/build.gradle', inputs.app_dir)) != '' }}
-                  working-directory: __OPEN__ inputs.app_dir }}
-                  run: ./gradlew assembleRelease
-
-                - name: Locate APK
-                  id: apk
-                  run: echo "path=$(find . -name '*.apk' -type f | head -n1)" >> "$GITHUB_OUTPUT"
-
-                - name: Send to Telegram
-                  env:
-                    TOKEN: __OPEN__ secrets.TELEGRAM_BOT_TOKEN }}
-                    CHAT:  __OPEN__ inputs.chat_id || github.event.client_payload.chat_id }}
-                  run: |
-                    curl -s -F chat_id="$CHAT" \
-                         -F caption="__OPEN__ inputs.app_name }} - built by BOAT in the cloud" \
-                         -F document=@"__OPEN__ steps.apk.outputs.path }}" \
-                         "https://api.telegram.org/bot${TOKEN}/sendDocument"
-          BOAT_EOF
-
-          echo "Placeholder files written:"
-          ls -1 .github/workflows/
-
-      - name: Substitute placeholder with GitHub expression opener
+      - name: Send to Telegram
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT:  ${{ inputs.chat_id }}
         run: |
-          OPENER=$(printf '%s%s%s' '$' '{' '{')
-          CLOSER='}}'
-
-          for f in .github/workflows/boat-brain.yml \
-                   .github/workflows/boat-trigger.yml \
-                   .github/workflows/boat-selfdrive.yml \
-                   .github/workflows/boat-build-apk.yml ; do
-            sed -i "s|__OPEN__|${OPENER}|g" "$f"
-          done
-
-          echo "Post-substitution sanity check:"
-          for f in .github/workflows/boat-brain.yml \
-                   .github/workflows/boat-trigger.yml \
-                   .github/workflows/boat-selfdrive.yml \
-                   .github/workflows/boat-build-apk.yml ; do
-            if grep -q '__OPEN__' "$f"; then
-              echo "FAIL: leftover placeholder in $f"
-              exit 1
-            fi
-            opens=$(grep -oF "$OPENER" "$f" | wc -l)
-            closes=$(grep -oF "$CLOSER" "$f" | wc -l)
-            echo "$f  opens=$opens  closes=$closes"
-            if [ "$opens" != "$closes" ]; then
-              echo "FAIL: unbalanced expression in $f"
-              exit 1
-            fi
-          done
-          echo "OK - all four workflows balanced."
-
-      - name: Commit workflows (race-safe)
-        run: |
-          set -e
-          mkdir -p /tmp/boat-out
-          cp .github/workflows/boat-brain.yml     /tmp/boat-out/
-          cp .github/workflows/boat-trigger.yml   /tmp/boat-out/
-          cp .github/workflows/boat-selfdrive.yml /tmp/boat-out/
-          cp .github/workflows/boat-build-apk.yml /tmp/boat-out/
-
-          git fetch origin "${GITHUB_REF_NAME:-main}" --depth=1
-          git reset --hard "origin/${GITHUB_REF_NAME:-main}"
-
-          cp /tmp/boat-out/boat-brain.yml     .github/workflows/
-          cp /tmp/boat-out/boat-trigger.yml   .github/workflows/
-          cp /tmp/boat-out/boat-selfdrive.yml .github/workflows/
-          cp /tmp/boat-out/boat-build-apk.yml .github/workflows/
-
-          git config user.name  "boat-bot"
-          git config user.email "boat@users.noreply.github.com"
-          git add .github/workflows/boat-*.yml
-          if git diff --cached --quiet; then
-            echo "Nothing new to commit."
-          else
-            git commit -m "boat: bootstrap workflows"
-            git push origin "HEAD:${GITHUB_REF_NAME:-main}"
-          fi
-          echo "Done."
+          curl -s -F chat_id="$CHAT" \
+               -F caption="${{ inputs.app_name }} - built by BOAT" \
+               -F document=@"${{ steps.apk.outputs.path }}" \
+               "https://api.telegram.org/bot${TOKEN}/sendDocument"
