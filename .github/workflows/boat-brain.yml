@@ -1,0 +1,59 @@
+name: BOAT brain
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Boat, do ..."
+        required: true
+        default: "make money anywhere today"
+      chat_id:
+        description: "Telegram chat_id"
+        required: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: boat-brain
+  cancel-in-progress: false
+
+jobs:
+  think:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - run: pip install -r requirements.txt
+      - run: python -m playwright install --with-deps chromium
+
+      - name: Run BOAT
+        env:
+          BOAT_LLM_BASE:         ${{ secrets.BOAT_LLM_BASE }}
+          BOAT_LLM_KEY:          ${{ secrets.BOAT_LLM_KEY }}
+          BOAT_LLM_MODEL:        ${{ secrets.BOAT_LLM_MODEL }}
+          TELEGRAM_BOT_TOKEN:    ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALLOWED:      ${{ secrets.TELEGRAM_ALLOWED }}
+          GITHUB_TOKEN:          ${{ secrets.BOAT_GH_TOKEN }}
+          GMAIL_USER:            ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD:    ${{ secrets.GMAIL_APP_PASSWORD }}
+          MOMO_BASE_URL:         ${{ secrets.MOMO_BASE_URL }}
+          MOMO_SUBSCRIPTION_KEY: ${{ secrets.MOMO_SUBSCRIPTION_KEY }}
+          BOAT_DAILY_GOAL:       "10"
+          BOAT_CMD:              ${{ github.event.inputs.command || 'make money anywhere today' }}
+          BOAT_CHAT:             ${{ github.event.inputs.chat_id }}
+        run: python -m boat.run_once
+
+      - name: Commit memory
+        if: always()
+        run: |
+          git config user.name  "boat-bot"
+          git config user.email "boat@users.noreply.github.com"
+          git add -f boat.db 2>/dev/null || true
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "boat: memory"
+          git push || true
