@@ -1,89 +1,979 @@
-name: Build Best Self APK
+name: BOAT bootstrap
 
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
-  repository_dispatch:
-    types: [build-apk, build-guitar, make-money]
 
-concurrency:
-  group: build-apk-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: write
 
 jobs:
-  build:
+  write:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        # provides dependency + build caching automatically
-
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
-      - name: Decode keystore
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      - name: Write all BOAT files
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.keystore
+          set -e
+          mkdir -p boat/tools boat/triggers .github/workflows
 
-      - name: Build Release APK
-        env:
-          KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --stacktrace --no-daemon
+          cat > requirements.txt <<'BOAT_FILE_END'
+          httpx>=0.27
+          playwright>=1.44
+          fastapi>=0.111
+          uvicorn>=0.30
+          python-multipart>=0.0.9
+          BOAT_FILE_END
 
-      - name: Locate APK
-        id: apk
+          cat > .env.example <<'BOAT_FILE_END'
+          BOAT_LLM_BASE=https://api.openai.com/v1
+          BOAT_LLM_KEY=sk-...
+          BOAT_LLM_MODEL=gpt-4o-mini
+          TELEGRAM_BOT_TOKEN=123:abc
+          TELEGRAM_ALLOWED=123456789
+          GITHUB_TOKEN=ghp_...
+          GMAIL_USER=you@gmail.com
+          GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+          MOMO_BASE_URL=
+          MOMO_SUBSCRIPTION_KEY=
+          TWILIO_SID=
+          TWILIO_TOKEN=
+          TWILIO_WA_FROM=+1...
+          BOAT_DAILY_GOAL=10
+          BOAT_FILE_END
+
+          cat > boat/__init__.py <<'BOAT_FILE_END'
+          # BOAT package.
+          BOAT_FILE_END
+
+          cat > boat/memory.py <<'BOAT_FILE_END'
+          import json, os, sqlite3, time
+
+          SCHEMA = """
+          CREATE TABLE IF NOT EXISTS missions(
+            id TEXT PRIMARY KEY, command TEXT, source TEXT, status TEXT,
+            money_today REAL DEFAULT 0, pivots INTEGER DEFAULT 0,
+            created REAL, updated REAL, meta TEXT);
+          CREATE TABLE IF NOT EXISTS payments(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mission_id TEXT, source TEXT, amount REAL, currency TEXT,
+            ref TEXT, verified INTEGER DEFAULT 0, ts REAL);
+          CREATE TABLE IF NOT EXISTS opportunities(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT, url TEXT, pays_today INTEGER, cost REAL,
+            eta_hours REAL, notes TEXT, ts REAL);
+          CREATE TABLE IF NOT EXISTS lessons(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mission_id TEXT, kind TEXT, text TEXT, ts REAL);
+          CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);
+          """
+
+          class Memory:
+              def __init__(self, path=None):
+                  self.path = path or os.environ.get("BOAT_DB", "boat.db")
+                  self.db = sqlite3.connect(self.path, check_same_thread=False)
+                  self.db.executescript(SCHEMA); self.db.commit()
+
+              def create_mission(self, mid, command, source):
+                  now = time.time()
+                  self.db.execute("INSERT INTO missions(id,command,source,status,created,updated) VALUES(?,?,?,?,?,?)",
+                                  (mid, command, source, "thinking", now, now))
+                  self.db.commit()
+
+              def update_mission(self, mid, **kw):
+                  if not kw: return
+                  cols = ", ".join(f"{k}=?" for k in kw)
+                  self.db.execute(f"UPDATE missions SET {cols}, updated=? WHERE id=?",
+                                  (*kw.values(), time.time(), mid))
+                  self.db.commit()
+
+              def record_payment(self, mid, source, amount, currency="USD", ref="", verified=0):
+                  self.db.execute("INSERT INTO payments(mission_id,source,amount,currency,ref,verified,ts) VALUES(?,?,?,?,?,?,?)",
+                                  (mid, source, amount, currency, ref, verified, time.time()))
+                  self.db.commit()
+
+              def money_today(self):
+                  start = time.time() - 86400
+                  cur = self.db.execute("SELECT COALESCE(SUM(amount),0) FROM payments WHERE verified=1 AND ts>=?", (start,))
+                  return float(cur.fetchone()[0] or 0)
+
+              def add_lesson(self, mid, kind, text):
+                  self.db.execute("INSERT INTO lessons(mission_id,kind,text,ts) VALUES(?,?,?,?)",
+                                  (mid, kind, text, time.time())); self.db.commit()
+
+              def add_opportunity(self, title, url, pays_today, cost, eta_hours, notes=""):
+                  self.db.execute("INSERT INTO opportunities(title,url,pays_today,cost,eta_hours,notes,ts) VALUES(?,?,?,?,?,?,?)",
+                                  (title, url, int(pays_today), cost, eta_hours, notes, time.time()))
+                  self.db.commit()
+
+              def recent_context(self, n=5):
+                  missions = self.db.execute("SELECT id, command, status, money_today FROM missions ORDER BY created DESC LIMIT ?", (n,)).fetchall()
+                  lessons = self.db.execute("SELECT kind, text FROM lessons ORDER BY ts DESC LIMIT 10").fetchall()
+                  return {
+                      "recent_missions": [{"id": m[0], "command": m[1], "status": m[2], "money_today": m[3]} for m in missions],
+                      "lessons": [{"kind": l[0], "text": l[1]} for l in lessons],
+                      "money_today_total": self.money_today(),
+                  }
+          BOAT_FILE_END
+
+          cat > boat/planner.py <<'BOAT_FILE_END'
+          import json, os, re
+          import httpx
+
+          SYSTEM = """You are BOAT — an autonomous hustler agent.
+          Rules:
+          1. ZERO-COST and MONEY-TODAY beat future money.
+          2. Never wait on a human. If a step needs a human, pick another step.
+          3. Act in parallel. Return up to 4 steps per batch.
+          4. Verify payments before delivering work (gmail + momo + sms).
+          5. If Plan A makes no money today, PIVOT to Plan B anywhere on the internet.
+          6. Emit JSON only. No prose outside the JSON object."""
+
+          class Planner:
+              def __init__(self, base=None, key=None, model=None):
+                  self.base = base or os.environ.get("BOAT_LLM_BASE", "https://api.openai.com/v1")
+                  self.key = key or os.environ.get("BOAT_LLM_KEY") or os.environ.get("OPENAI_API_KEY")
+                  self.model = model or os.environ.get("BOAT_LLM_MODEL", "gpt-4o-mini")
+
+              async def _chat(self, messages, max_tokens=1200):
+                  async with httpx.AsyncClient(timeout=90) as c:
+                      r = await c.post(f"{self.base}/chat/completions",
+                                       headers={"Authorization": f"Bearer {self.key}"},
+                                       json={"model": self.model, "messages": messages,
+                                             "temperature": 0.4, "max_tokens": max_tokens,
+                                             "response_format": {"type": "json_object"}})
+                      r.raise_for_status()
+                      return r.json()["choices"][0]["message"]["content"]
+
+              @staticmethod
+              def _json(s):
+                  try: return json.loads(s)
+                  except Exception:
+                      m = re.search(r"\{.*\}", s, re.S)
+                      return json.loads(m.group(0)) if m else {}
+
+              async def scan(self, command, context):
+                  msg = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"""
+          PHASE: SCAN.
+          Command: "{command}"
+          Memory: {json.dumps(context)[:3000]}
+          List available resources and 5 concrete today-opportunities on the internet where THIS command makes money TODAY at zero cost.
+          Return JSON: {{"resources":[...], "today_opportunities":[{{"title":..,"url":..,"pays_today":true,"cost":0,"eta_hours":1,"notes":..}}]}}
+          """}]
+                  return self._json(await self._chat(msg))
+
+              async def decide(self, command, scan, tools):
+                  msg = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"""
+          PHASE: DECIDE.
+          Command: "{command}"
+          Scan: {json.dumps(scan)[:4000]}
+          Tools: {json.dumps([t["name"] for t in tools])}
+          First parallel batch (<=4 steps) that moves money TODAY at zero cost.
+          Return JSON: {{"plan_name":"...","steps":[{{"tool":"...","args":{{}},"why":"..."}}]}}
+          """}]
+                  return self._json(await self._chat(msg))
+
+              async def next(self, command, mission, last_results, tools):
+                  msg = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"""
+          PHASE: NEXT.
+          Command: "{command}"
+          Mission: {json.dumps(mission)[:4000]}
+          Last batch results: {json.dumps(last_results)[:4000]}
+          Tools: {json.dumps([t["name"] for t in tools])}
+          Return one of:
+            {{"done":true,"summary":"..."}}
+            {{"steps":[...]}}
+            {{"pivot":true,"reason":"..."}}
+          """}]
+                  return self._json(await self._chat(msg))
+
+              async def pivot(self, command, mission, tools):
+                  msg = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"""
+          PHASE: PIVOT.
+          Command: "{command}"
+          Failed approach: {json.dumps(mission)[:3500]}
+          Tools: {json.dumps([t["name"] for t in tools])}
+          Plan A made no money today. Invent Plan B — a DIFFERENT path that pays TODAY at zero cost.
+          Return JSON: {{"plan_name":"...","steps":[{{"tool":"...","args":{{}},"why":"..."}}]}}
+          """}]
+                  return self._json(await self._chat(msg))
+          BOAT_FILE_END
+
+          cat > boat/brain.py <<'BOAT_FILE_END'
+          import asyncio, json, logging, os, time, uuid
+
+          from .memory import Memory
+          from .planner import Planner
+          from .tools import call_tool, tool_specs, load_all
+
+          log = logging.getLogger("boat.brain")
+          BATCH = 4
+          MAX_ITER = 12
+          DAILY_GOAL = float(os.environ.get("BOAT_DAILY_GOAL", "10"))
+
+          class Boat:
+              def __init__(self, memory=None, planner=None):
+                  load_all()
+                  self.memory = memory or Memory()
+                  self.planner = planner or Planner()
+
+              async def handle(self, command, source="github", reply_to=None):
+                  mid = uuid.uuid4().hex[:10]
+                  self.memory.create_mission(mid, command, source)
+                  await self._say(reply_to, f"BOAT engaged — {command} (mission {mid})")
+
+                  mission = {"id": mid, "command": command, "steps_done": [],
+                             "pivots": 0, "money_today": self.memory.money_today(),
+                             "status": "scanning"}
+
+                  try:
+                      scan = await self.planner.scan(command, self.memory.recent_context())
+                  except Exception as e:
+                      scan = {"error": str(e), "today_opportunities": []}
+                  for op in scan.get("today_opportunities", [])[:10]:
+                      self.memory.add_opportunity(op.get("title", "")[:200], op.get("url", ""),
+                                                  op.get("pays_today", False),
+                                                  float(op.get("cost", 0) or 0),
+                                                  float(op.get("eta_hours", 1) or 1),
+                                                  op.get("notes", "")[:300])
+                  mission["scan"] = scan
+                  await self._say(reply_to, f"Scanned {len(scan.get('today_opportunities', []))} today-opportunities.")
+
+                  try:
+                      decision = await self.planner.decide(command, scan, tool_specs())
+                  except Exception as e:
+                      return self._finish(mid, "planning_failed", {"error": str(e)}, reply_to)
+                  plan = decision.get("steps", [])[:BATCH]
+                  await self._say(reply_to, f"Plan: {decision.get('plan_name','default')} — {len(plan)} steps.")
+
+                  results_all = []
+                  for it in range(MAX_ITER):
+                      if not plan: break
+                      mission["status"] = "acting"
+                      self.memory.update_mission(mid, status="acting")
+
+                      results = await asyncio.gather(*[self._run_step(s) for s in plan], return_exceptions=True)
+                      norm = [r if isinstance(r, dict) else {"error": str(r)} for r in results]
+                      results_all.extend(norm)
+                      for s, r in zip(plan, norm):
+                          mission["steps_done"].append({"tool": s.get("tool"), "why": s.get("why", ""),
+                                                        "ok": r.get("ok", True), "result": _trim(r)})
+
+                      paid = await self._verify(mid, reply_to)
+                      if paid:
+                          mission["status"] = "paid"
+                          self.memory.update_mission(mid, status="paid", money_today=self.memory.money_today())
+                          self.memory.add_lesson(mid, "paid", f"payment verified for: {command}")
+
+                      if not paid and self.memory.money_today() < DAILY_GOAL and it >= 1:
+                          mission["pivots"] += 1
+                          self.memory.update_mission(mid, pivots=mission["pivots"])
+                          try:
+                              piv = await self.planner.pivot(command, mission, tool_specs())
+                          except Exception as e:
+                              piv = {"steps": [], "error": str(e)}
+                          new_plan = piv.get("steps", [])[:BATCH]
+                          if new_plan:
+                              await self._say(reply_to, f"No money today -> pivoting to {piv.get('plan_name','Plan B')}")
+                              self.memory.add_lesson(mid, "pivot", f"pivoted: {piv.get('plan_name','')}")
+                          plan = new_plan
+                          continue
+
+                      try:
+                          nxt = await self.planner.next(command, mission, norm, tool_specs())
+                      except Exception as e:
+                          nxt = {"done": True, "summary": f"planner error: {e}"}
+                      if nxt.get("done"):
+                          return self._finish(mid, "done",
+                                              {"summary": nxt.get("summary", ""), "results": results_all},
+                                              reply_to)
+                      plan = (nxt.get("steps") or [])[:BATCH]
+
+                  return self._finish(mid, "max_iterations", {"results": results_all}, reply_to)
+
+              async def _run_step(self, step):
+                  name = step.get("tool"); args = step.get("args") or {}
+                  t0 = time.time()
+                  try:
+                      res = await call_tool(name, args)
+                      return {"tool": name, "ok": True, "ms": int((time.time()-t0)*1000), "result": res}
+                  except Exception as e:
+                      log.exception("tool %s failed", name)
+                      return {"tool": name, "ok": False, "error": str(e), "ms": int((time.time()-t0)*1000)}
+
+              async def _verify(self, mid, reply_to):
+                  found = False
+                  try:
+                      g = await call_tool("gmail.find_payments", {"since_days": 1})
+                      for h in g.get("hits", []):
+                          for a in h.get("amounts", []):
+                              try: amt = float(str(a).replace(",", ""))
+                              except ValueError: continue
+                              self.memory.record_payment(mid, "gmail", amt, "USD", ref=h.get("subject", "")[:80], verified=1)
+                              found = True
+                  except Exception as e:
+                      log.debug("gmail verify skipped: %s", e)
+                  try:
+                      m = await call_tool("momo.recent", {"limit": 10})
+                      if m.get("ok") and m.get("body"):
+                          self.memory.record_payment(mid, "momo", 0.0, "UGX", ref=str(m.get("body"))[:80], verified=1)
+                          found = True
+                  except Exception as e:
+                      log.debug("momo verify skipped: %s", e)
+                  try:
+                      s = await call_tool("phone.sms", {"limit": 20})
+                      for msg in s.get("messages", []):
+                          blob = (msg.get("body") or "").lower()
+                          if any(k in blob for k in ("received", "paid", "mpesa", "momo", "deposit")):
+                              self.memory.record_payment(mid, "sms", 0.0, "UGX", ref=(msg.get("body") or "")[:80], verified=1)
+                              found = True; break
+                  except Exception as e:
+                      log.debug("sms verify skipped: %s", e)
+                  if found:
+                      await self._say(reply_to, f"Payment verified. Today total: {self.memory.money_today()}")
+                  return found
+
+              async def _say(self, chat_id, text):
+                  log.info("BOAT> %s", text)
+                  if chat_id:
+                      try: await call_tool("telegram.send", {"chat_id": str(chat_id), "text": text})
+                      except Exception: pass
+
+              def _finish(self, mid, status, payload, reply_to):
+                  self.memory.update_mission(mid, status=status, money_today=self.memory.money_today())
+                  asyncio.create_task(self._say(reply_to, f"Mission {mid} -> {status}\n{json.dumps(payload)[:900]}"))
+                  return {"mission_id": mid, "status": status, **payload}
+
+          def _trim(r, n=800):
+              try:
+                  s = json.dumps(r)
+                  return json.loads(s if len(s) <= n else s[:n] + '..."')
+              except Exception:
+                  return str(r)[:n]
+          BOAT_FILE_END
+
+          cat > boat/run_once.py <<'BOAT_FILE_END'
+          import asyncio, os
+          from .brain import Boat
+
+          def main():
+              cmd = os.environ.get("BOAT_CMD") or "make money anywhere today"
+              chat = os.environ.get("BOAT_CHAT") or None
+              asyncio.run(Boat().handle(cmd, source="github", reply_to=chat))
+
+          if __name__ == "__main__":
+              main()
+          BOAT_FILE_END
+
+          cat > boat/tools/__init__.py <<'BOAT_FILE_END'
+          import inspect
+
+          REGISTRY = {}
+
+          def tool(name, desc, params=None, danger="low"):
+              def deco(fn):
+                  REGISTRY[name] = {"name": name, "desc": desc, "fn": fn,
+                                    "params": params or {"type": "object", "properties": {}},
+                                    "danger": danger}
+                  return fn
+              return deco
+
+          def tool_specs():
+              return [{"name": v["name"], "description": v["desc"], "parameters": v["params"]}
+                      for v in REGISTRY.values()]
+
+          async def call_tool(name, args):
+              if name not in REGISTRY: raise KeyError(f"unknown tool: {name}")
+              fn = REGISTRY[name]["fn"]
+              if inspect.iscoroutinefunction(fn):
+                  return await fn(**(args or {}))
+              return fn(**(args or {}))
+
+          def load_all():
+              from . import (shell_tool, browser_tool, phone_tool, gmail_tool,
+                             momo_tool, github_tool, social_tool, telegram_tool)
+          BOAT_FILE_END
+
+          cat > boat/tools/shell_tool.py <<'BOAT_FILE_END'
+          import asyncio, os
+          from . import tool
+
+          @tool("shell.run", "Run a shell command on the host.",
+                {"type": "object", "properties": {"cmd": {"type":"string"}, "cwd": {"type":"string"},
+                                                  "timeout": {"type":"integer","default":120}},
+                 "required": ["cmd"]}, danger="high")
+          async def shell_run(cmd, cwd=None, timeout=120):
+              proc = await asyncio.create_subprocess_shell(cmd, cwd=cwd or os.getcwd(),
+                                                            stdout=asyncio.subprocess.PIPE,
+                                                            stderr=asyncio.subprocess.PIPE)
+              try:
+                  out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+              except asyncio.TimeoutError:
+                  proc.kill(); return {"ok": False, "error": "timeout"}
+              return {"ok": proc.returncode == 0, "code": proc.returncode,
+                      "stdout": out.decode(errors="ignore")[:8000],
+                      "stderr": err.decode(errors="ignore")[:4000]}
+          BOAT_FILE_END
+
+          cat > boat/tools/browser_tool.py <<'BOAT_FILE_END'
+          from . import tool
+
+          @tool("browser.open", "Open a URL headless and return visible text + links.",
+                {"type": "object", "properties": {"url": {"type":"string"}}, "required": ["url"]})
+          async def browser_open(url):
+              from playwright.async_api import async_playwright
+              async with async_playwright() as p:
+                  b = await p.chromium.launch(headless=True)
+                  pg = await b.new_page()
+                  await pg.goto(url, wait_until="domcontentloaded", timeout=45000)
+                  text = await pg.inner_text("body")
+                  links = await pg.eval_on_selector_all("a", "els => els.slice(0,80).map(e => ({t:e.innerText.trim(), h:e.href}))")
+                  await b.close()
+                  return {"url": url, "text": text[:8000], "links": links}
+
+          @tool("browser.register",
+                "Register on a site by filling selectors. Use only where automation is permitted.",
+                {"type": "object", "properties": {"url": {"type":"string"},
+                                                  "fields": {"type":"object"},
+                                                  "submit_selector": {"type":"string"},
+                                                  "wait_after_ms": {"type":"integer","default":3000}},
+                 "required": ["url", "fields"]}, danger="high")
+          async def browser_register(url, fields, submit_selector=None, wait_after_ms=3000):
+              from playwright.async_api import async_playwright
+              async with async_playwright() as p:
+                  b = await p.chromium.launch(headless=True)
+                  pg = await b.new_page()
+                  await pg.goto(url, wait_until="domcontentloaded", timeout=45000)
+                  for sel, val in fields.items():
+                      try: await pg.fill(sel, str(val), timeout=8000)
+                      except Exception as e: return {"ok": False, "at": sel, "error": str(e)}
+                  if submit_selector: await pg.click(submit_selector)
+                  await pg.wait_for_timeout(wait_after_ms)
+                  final = pg.url; text = (await pg.inner_text("body"))[:3000]
+                  await b.close()
+                  return {"ok": True, "final_url": final, "text": text}
+          BOAT_FILE_END
+
+          cat > boat/tools/phone_tool.py <<'BOAT_FILE_END'
+          import asyncio
+          from . import tool
+
+          async def _adb(*args):
+              p = await asyncio.create_subprocess_exec("adb", *args,
+                      stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+              out, err = await p.communicate()
+              return out.decode(errors="ignore"), err.decode(errors="ignore")
+
+          @tool("phone.contacts", "List phone contacts via adb.", {"type":"object","properties":{}})
+          async def phone_contacts():
+              out, err = await _adb("shell", "content", "query",
+                                    "--uri", "content://com.android.contacts/data/phones",
+                                    "--projection", "display_name:data1")
+              rows = []
+              for line in out.splitlines():
+                  if "display_name=" in line:
+                      row = {p.split("=",1)[0].strip(): p.split("=",1)[1].strip()
+                             for p in line.split(",") if "=" in p}
+                      rows.append(row)
+              return {"count": len(rows), "contacts": rows[:200], "stderr": err[:500]}
+
+          @tool("phone.gallery", "Recent phone gallery photos.", {"type":"object","properties":{"limit":{"type":"integer","default":20}}})
+          async def phone_gallery(limit=20):
+              out, _ = await _adb("shell", "ls", "-t", "/sdcard/DCIM/Camera")
+              return {"files": [f for f in out.split() if f.lower().endswith((".jpg",".png",".mp4"))][:limit]}
+
+          @tool("phone.sms", "Dump last N SMS messages.", {"type":"object","properties":{"limit":{"type":"integer","default":30}}})
+          async def phone_sms(limit=30):
+              out, err = await _adb("shell", "content", "query", "--uri", "content://sms/inbox",
+                                    "--projection", "address:body:date")
+              msgs = [dict(p.split("=",1) for p in line.split(",") if "=" in p)
+                      for line in out.splitlines() if "body=" in line]
+              return {"count": len(msgs), "messages": msgs[-limit:], "stderr": err[:300]}
+          BOAT_FILE_END
+
+          cat > boat/tools/gmail_tool.py <<'BOAT_FILE_END'
+          import asyncio, email, imaplib, os, re
+          from . import tool
+
+          def _body(msg):
+              if msg.is_multipart():
+                  for part in msg.walk():
+                      if part.get_content_type() == "text/plain":
+                          try: return part.get_payload(decode=True).decode(errors="ignore")
+                          except Exception: pass
+                  return ""
+              try: return msg.get_payload(decode=True).decode(errors="ignore")
+              except Exception: return ""
+
+          def _imap():
+              M = imaplib.IMAP4_SSL("imap.gmail.com")
+              M.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
+              M.select("INBOX"); return M
+
+          @tool("gmail.search", "Search Gmail (IMAP syntax).",
+                {"type":"object","properties":{"query":{"type":"string","default":"UNSEEN"},
+                                               "limit":{"type":"integer","default":10}}})
+          async def gmail_search(query="UNSEEN", limit=10):
+              def _run():
+                  M = _imap()
+                  _, data = M.search(None, query)
+                  ids = data[0].split()[-limit:]
+                  out = []
+                  for i in ids:
+                      _, d = M.fetch(i, "(RFC822)")
+                      m = email.message_from_bytes(d[0][1])
+                      out.append({"from": m.get("From"), "subject": m.get("Subject"),
+                                  "date": m.get("Date"), "snippet": _body(m)[:600]})
+                  M.logout(); return out
+              return await asyncio.to_thread(_run)
+
+          @tool("gmail.find_payments", "Scan inbox for payment confirmations.",
+                {"type":"object","properties":{"since_days":{"type":"integer","default":2}}})
+          async def gmail_find_payments(since_days=2):
+              hints = r"(paid|payment|received|deposit|mpesa|m-pesa|momo|paypal|stripe|wise|bank)"
+              msgs = await gmail_search("ALL", 40)
+              hits = []
+              for m in msgs:
+                  blob = f"{m.get('subject','')} {m.get('snippet','')}".lower()
+                  if re.search(hints, blob):
+                      amounts = re.findall(r"(?:usd|ksh|kes|ugx|\$|EUR|GBP)\s?([0-9][0-9,\.]*)", blob)
+                      hits.append({"from": m["from"], "subject": m["subject"],
+                                   "amounts": amounts, "snippet": m["snippet"][:200]})
+              return {"hits": hits[:20], "scanned": len(msgs)}
+          BOAT_FILE_END
+
+          cat > boat/tools/momo_tool.py <<'BOAT_FILE_END'
+          import os, time, httpx
+          from . import tool
+
+          @tool("momo.recent", "List recent MoMo/M-Pesa transactions.",
+                {"type":"object","properties":{"limit":{"type":"integer","default":20}}})
+          async def momo_recent(limit=20):
+              base = os.environ.get("MOMO_BASE_URL"); sub = os.environ.get("MOMO_SUBSCRIPTION_KEY")
+              if not (base and sub):
+                  return {"ok": False, "reason": "MOMO_BASE_URL / MOMO_SUBSCRIPTION_KEY not set"}
+              async with httpx.AsyncClient(timeout=30) as c:
+                  r = await c.get(f"{base}/collection/v1_0/account/balance",
+                                  headers={"Ocp-Apim-Subscription-Key": sub})
+                  return {"ok": r.status_code == 200, "status": r.status_code, "body": r.text[:2000]}
+
+          @tool("momo.verify", "Verify a payment reference.",
+                {"type":"object","properties":{"ref":{"type":"string"},
+                                               "amount":{"type":"number"},
+                                               "currency":{"type":"string","default":"UGX"}},
+                 "required":["ref"]})
+          async def momo_verify(ref, amount=None, currency="UGX"):
+              base = os.environ.get("MOMO_BASE_URL"); sub = os.environ.get("MOMO_SUBSCRIPTION_KEY")
+              if not (base and sub): return {"ok": False, "reason": "momo not configured", "ref": ref}
+              async with httpx.AsyncClient(timeout=30) as c:
+                  r = await c.get(f"{base}/collection/v1_0/requesttopay/{ref}",
+                                  headers={"Ocp-Apim-Subscription-Key": sub})
+                  return {"ok": r.status_code == 200, "ref": ref, "body": r.text[:2000], "ts": time.time()}
+          BOAT_FILE_END
+
+          cat > boat/tools/github_tool.py <<'BOAT_FILE_END'
+          import base64, os, httpx
+          from . import tool
+
+          API = "https://api.github.com"
+
+          def _h():
+              return {"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+                      "Accept": "application/vnd.github+json"}
+
+          @tool("github.push_file", "Create or update a file in a GitHub repo (triggers CI).",
+                {"type":"object","properties":{"repo":{"type":"string"}, "path":{"type":"string"},
+                                               "content":{"type":"string"},
+                                               "message":{"type":"string","default":"boat: update"},
+                                               "branch":{"type":"string","default":"main"}},
+                 "required":["repo","path","content"]})
+          async def github_push_file(repo, path, content, message="boat: update", branch="main"):
+              async with httpx.AsyncClient(timeout=30, headers=_h()) as c:
+                  sha = None
+                  r = await c.get(f"{API}/repos/{repo}/contents/{path}", params={"ref": branch})
+                  if r.status_code == 200: sha = r.json().get("sha")
+                  body = {"message": message, "branch": branch,
+                          "content": base64.b64encode(content.encode()).decode()}
+                  if sha: body["sha"] = sha
+                  r = await c.put(f"{API}/repos/{repo}/contents/{path}", json=body)
+                  return {"ok": r.status_code in (200,201), "status": r.status_code, "body": r.text[:800]}
+
+          @tool("github.dispatch", "Trigger a GitHub Actions workflow_dispatch.",
+                {"type":"object","properties":{"repo":{"type":"string"}, "workflow":{"type":"string"},
+                                               "ref":{"type":"string","default":"main"},
+                                               "inputs":{"type":"object"}},
+                 "required":["repo","workflow"]})
+          async def github_dispatch(repo, workflow, ref="main", inputs=None):
+              async with httpx.AsyncClient(timeout=30, headers=_h()) as c:
+                  r = await c.post(f"{API}/repos/{repo}/actions/workflows/{workflow}/dispatches",
+                                   json={"ref": ref, "inputs": inputs or {}})
+                  return {"ok": r.status_code == 204, "status": r.status_code}
+          BOAT_FILE_END
+
+          cat > boat/tools/social_tool.py <<'BOAT_FILE_END'
+          import os, httpx
+          from . import tool
+
+          @tool("social.telegram_post", "Post to a Telegram channel/chat.",
+                {"type":"object","properties":{"chat_id":{"type":"string"}, "text":{"type":"string"}},
+                 "required":["chat_id","text"]})
+          async def social_telegram_post(chat_id, text):
+              token = os.environ["TELEGRAM_BOT_TOKEN"]
+              async with httpx.AsyncClient(timeout=20) as c:
+                  r = await c.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                   json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+                  return {"ok": r.status_code == 200, "body": r.text[:400]}
+
+          @tool("social.whatsapp_send", "Send WhatsApp via Twilio.",
+                {"type":"object","properties":{"to":{"type":"string"}, "body":{"type":"string"}},
+                 "required":["to","body"]})
+          async def social_whatsapp_send(to, body):
+              sid = os.environ["TWILIO_SID"]; tok = os.environ["TWILIO_TOKEN"]; frm = os.environ["TWILIO_WA_FROM"]
+              async with httpx.AsyncClient(timeout=30) as c:
+                  r = await c.post(f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                                   auth=(sid, tok),
+                                   data={"From": f"whatsapp:{frm}", "To": f"whatsapp:{to}", "Body": body})
+                  return {"ok": r.status_code in (200,201), "body": r.text[:400]}
+          BOAT_FILE_END
+
+          cat > boat/tools/telegram_tool.py <<'BOAT_FILE_END'
+          import os, httpx
+          from . import tool
+
+          @tool("telegram.send", "Send a Telegram message.",
+                {"type":"object","properties":{"chat_id":{"type":"string"}, "text":{"type":"string"}},
+                 "required":["chat_id","text"]})
+          async def telegram_send(chat_id, text):
+              token = os.environ["TELEGRAM_BOT_TOKEN"]
+              async with httpx.AsyncClient(timeout=20) as c:
+                  r = await c.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                   json={"chat_id": chat_id, "text": text[:4000]})
+                  return {"ok": r.status_code == 200, "body": r.text[:300]}
+
+          @tool("telegram.send_document", "Send a file to Telegram.",
+                {"type":"object","properties":{"chat_id":{"type":"string"}, "path":{"type":"string"},
+                                               "caption":{"type":"string","default":""}},
+                 "required":["chat_id","path"]})
+          async def telegram_send_document(chat_id, path, caption=""):
+              token = os.environ["TELEGRAM_BOT_TOKEN"]
+              async with httpx.AsyncClient(timeout=120) as c:
+                  with open(path, "rb") as f:
+                      r = await c.post(f"https://api.telegram.org/bot{token}/sendDocument",
+                                       data={"chat_id": chat_id, "caption": caption},
+                                       files={"document": f})
+                  return {"ok": r.status_code == 200, "body": r.text[:300]}
+          BOAT_FILE_END
+
+          cat > boat/triggers/__init__.py <<'BOAT_FILE_END'
+          # BOAT triggers package.
+          BOAT_FILE_END
+
+          cat > boat/triggers/telegram_trigger.py <<'BOAT_FILE_END'
+          import asyncio, logging, os
+          import httpx
+          from ..brain import Boat
+
+          log = logging.getLogger("boat.telegram")
+
+          class TelegramTrigger:
+              def __init__(self, boat, token=None, allowed=None):
+                  self.boat = boat
+                  self.token = token or os.environ["TELEGRAM_BOT_TOKEN"]
+                  self.allowed = allowed or set(filter(None, os.environ.get("TELEGRAM_ALLOWED", "").split(",")))
+                  self.offset = 0
+
+              async def _get_updates(self):
+                  url = f"https://api.telegram.org/bot{self.token}/getUpdates"
+                  async with httpx.AsyncClient(timeout=45) as c:
+                      r = await c.get(url, params={"timeout": 30, "offset": self.offset})
+                      return r.json().get("result", [])
+
+              async def run(self):
+                  log.info("Telegram trigger up")
+                  while True:
+                      try:
+                          for u in await self._get_updates():
+                              self.offset = u["update_id"] + 1
+                              msg = u.get("message") or u.get("channel_post") or {}
+                              text = (msg.get("text") or "").strip()
+                              chat_id = str((msg.get("chat") or {}).get("id") or "")
+                              if not text or not chat_id: continue
+                              if self.allowed and chat_id not in self.allowed: continue
+                              if not text.lower().startswith("boat"): continue
+                              cmd = text.split(",", 1)[1].strip() if "," in text else text[4:].strip()
+                              cmd = cmd or "make money anywhere today"
+                              asyncio.create_task(self.boat.handle(cmd, source="telegram", reply_to=chat_id))
+                      except Exception as e:
+                          log.exception("telegram poll error: %s", e)
+                          await asyncio.sleep(3)
+          BOAT_FILE_END
+
+          cat > boat/triggers/whatsapp_trigger.py <<'BOAT_FILE_END'
+          import asyncio, os
+          from fastapi import FastAPI, Form
+          from ..brain import Boat
+
+          app = FastAPI()
+          boat = Boat()
+
+          @app.post("/whatsapp")
+          async def whatsapp(From: str = Form(...), Body: str = Form(...)):
+              text = (Body or "").strip()
+              if text.lower().startswith("boat"):
+                  cmd = text.split(",", 1)[1].strip() if "," in text else text[4:].strip()
+                  asyncio.create_task(boat.handle(cmd or "make money anywhere today",
+                                                  source="whatsapp", reply_to=From))
+              return {"ok": True}
+          BOAT_FILE_END
+
+          cat > .github/workflows/boat-brain.yml <<'BOAT_FILE_END'
+          name: BOAT brain
+
+          on:
+            workflow_dispatch:
+              inputs:
+                command:
+                  description: "Boat, do ..."
+                  required: true
+                  default: "make money anywhere today"
+                chat_id:
+                  description: "Telegram chat_id to reply to"
+                  required: false
+            repository_dispatch:
+              types: [boat-command]
+
+          permissions:
+            contents: write
+            actions: write
+
+          concurrency:
+            group: boat-brain
+            cancel-in-progress: false
+
+          jobs:
+            think:
+              runs-on: ubuntu-latest
+              timeout-minutes: 30
+              steps:
+                - uses: actions/checkout@v4
+                  with: { fetch-depth: 1 }
+                - uses: actions/setup-python@v5
+                  with: { python-version: "3.11", cache: pip }
+                - run: pip install -r requirements.txt
+                - run: python -m playwright install --with-deps chromium
+
+                - name: Resolve command
+                  id: cmd
+                  run: |
+                    CMD="${{ github.event.inputs.command || github.event.client_payload.command || 'make money anywhere today' }}"
+                    CHAT="${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}"
+                    echo "command=$CMD" >> "$GITHUB_OUTPUT"
+                    echo "chat_id=$CHAT" >> "$GITHUB_OUTPUT"
+
+                - name: Run BOAT
+                  env:
+                    BOAT_LLM_BASE:        ${{ secrets.BOAT_LLM_BASE }}
+                    BOAT_LLM_KEY:         ${{ secrets.BOAT_LLM_KEY }}
+                    BOAT_LLM_MODEL:       ${{ secrets.BOAT_LLM_MODEL }}
+                    TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+                    TELEGRAM_ALLOWED:     ${{ secrets.TELEGRAM_ALLOWED }}
+                    GITHUB_TOKEN:         ${{ secrets.BOAT_GH_TOKEN }}
+                    GMAIL_USER:           ${{ secrets.GMAIL_USER }}
+                    GMAIL_APP_PASSWORD:   ${{ secrets.GMAIL_APP_PASSWORD }}
+                    MOMO_BASE_URL:        ${{ secrets.MOMO_BASE_URL }}
+                    MOMO_SUBSCRIPTION_KEY: ${{ secrets.MOMO_SUBSCRIPTION_KEY }}
+                    TWILIO_SID:           ${{ secrets.TWILIO_SID }}
+                    TWILIO_TOKEN:         ${{ secrets.TWILIO_TOKEN }}
+                    TWILIO_WA_FROM:       ${{ secrets.TWILIO_WA_FROM }}
+                    BOAT_DAILY_GOAL:      "10"
+                    BOAT_CMD:             ${{ steps.cmd.outputs.command }}
+                    BOAT_CHAT:            ${{ steps.cmd.outputs.chat_id }}
+                  run: python -m boat.run_once
+
+                - name: Commit memory (boat.db)
+                  if: always()
+                  run: |
+                    git config user.name  "boat-bot"
+                    git config user.email "boat@users.noreply.github.com"
+                    git add -f boat.db 2>/dev/null || true
+                    git diff --cached --quiet || git commit -m "boat: memory @ $(date -u +%FT%TZ) [${{ steps.cmd.outputs.command }}]"
+                    git push || true
+          BOAT_FILE_END
+
+          cat > .github/workflows/boat-trigger.yml <<'BOAT_FILE_END'
+          name: BOAT trigger
+
+          on:
+            schedule:
+              - cron: "*/5 * * * *"
+            workflow_dispatch:
+
+          permissions:
+            contents: write
+            actions: write
+
+          concurrency:
+            group: boat-trigger
+            cancel-in-progress: false
+
+          jobs:
+            poll:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+
+                - name: Read offset + poll Telegram
+                  env:
+                    TG_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+                    TG_ALLOWED: ${{ secrets.TELEGRAM_ALLOWED }}
+                  run: |
+                    mkdir -p .boat
+                    OFFSET=0; [ -f .boat/tg_offset ] && OFFSET=$(cat .boat/tg_offset)
+                    curl -s "https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${OFFSET}&timeout=0" -o updates.json
+                    python - <<'PY'
+                    import json, os, pathlib
+                    data = json.load(open("updates.json"))
+                    allowed = set(filter(None, os.environ.get("TG_ALLOWED","").split(",")))
+                    last, cmds = 0, []
+                    for u in data.get("result", []):
+                        last = max(last, u["update_id"])
+                        msg = u.get("message") or u.get("channel_post") or {}
+                        text = (msg.get("text") or "").strip()
+                        chat = str((msg.get("chat") or {}).get("id") or "")
+                        if not text or not chat: continue
+                        if allowed and chat not in allowed: continue
+                        low = text.lower()
+                        if not low.startswith("boat"): continue
+                        cmd = text.split(",",1)[1].strip() if "," in text else text[4:].strip()
+                        cmds.append({"cmd": cmd or "make money anywhere today", "chat": chat})
+                    pathlib.Path(".boat/tg_offset").write_text(str(last + 1))
+                    pathlib.Path(".boat/commands.json").write_text(json.dumps(cmds))
+                    print(f"found {len(cmds)} commands")
+                    PY
+
+                - name: Dispatch brain per command
+                  env:
+                    GH_TOKEN: ${{ secrets.BOAT_GH_TOKEN }}
+                  run: |
+                    python - <<'PY'
+                    import json, os, subprocess
+                    cmds = json.load(open(".boat/commands.json"))
+                    repo = os.environ["GITHUB_REPOSITORY"]
+                    for c in cmds:
+                        subprocess.run(
+                            ["gh","workflow","run","boat-brain.yml","-R", repo,
+                             "-f", f"command={c['cmd']}", "-f", f"chat_id={c['chat']}"],
+                            check=False,
+                        )
+                    PY
+
+                - name: Persist offset
+                  run: |
+                    git config user.name  "boat-bot"
+                    git config user.email "boat@users.noreply.github.com"
+                    git add .boat/tg_offset
+                    git diff --cached --quiet || git commit -m "boat: tg offset"
+                    git push || true
+          BOAT_FILE_END
+
+          cat > .github/workflows/boat-selfdrive.yml <<'BOAT_FILE_END'
+          name: BOAT self-drive
+
+          on:
+            schedule:
+              - cron: "0 */4 * * *"
+            workflow_dispatch:
+
+          permissions:
+            contents: write
+            actions: write
+
+          concurrency:
+            group: boat-brain
+            cancel-in-progress: false
+
+          jobs:
+            drive:
+              runs-on: ubuntu-latest
+              steps:
+                - name: Dispatch a self-drive brain run
+                  env:
+                    GH_TOKEN: ${{ secrets.BOAT_GH_TOKEN }}
+                  run: |
+                    gh workflow run boat-brain.yml -R "$GITHUB_REPOSITORY" \
+                       -f "command=make money anywhere today (self-drive)"
+          BOAT_FILE_END
+
+          cat > .github/workflows/boat-build-apk.yml <<'BOAT_FILE_END'
+          name: BOAT build APK
+
+          on:
+            workflow_dispatch:
+              inputs:
+                app_dir:      { required: true,  default: "app" }
+                app_name:     { required: false, default: "BoatApp" }
+                package_name: { required: false, default: "com.boat.app" }
+                chat_id:      { required: true }
+            repository_dispatch:
+              types: [boat-build-apk]
+
+          permissions:
+            contents: read
+
+          jobs:
+            build:
+              runs-on: ubuntu-latest
+              timeout-minutes: 30
+              steps:
+                - uses: actions/checkout@v4
+
+                - uses: actions/setup-java@v4
+                  with: { distribution: temurin, java-version: "17" }
+
+                - name: Flutter build (if pubspec.yaml)
+                  if: ${{ hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != '' }}
+                  uses: subosito/flutter-action@v2
+                  with: { channel: stable }
+
+                - name: flutter build
+                  if: ${{ hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != '' }}
+                  working-directory: ${{ inputs.app_dir }}
+                  run: |
+                    flutter pub get
+                    flutter build apk --release \
+                      --dart-define=APP_NAME="${{ inputs.app_name }}" \
+                      --dart-define=PACKAGE_NAME="${{ inputs.package_name }}"
+
+                - name: Gradle build (if build.gradle)
+                  if: ${{ hashFiles(format('{0}/build.gradle', inputs.app_dir)) != '' }}
+                  working-directory: ${{ inputs.app_dir }}
+                  run: ./gradlew assembleRelease
+
+                - name: Locate APK
+                  id: apk
+                  run: echo "path=$(find . -name '*.apk' -type f | head -n1)" >> "$GITHUB_OUTPUT"
+
+                - name: Send to Telegram
+                  env:
+                    TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+                    CHAT:  ${{ inputs.chat_id || github.event.client_payload.chat_id }}
+                  run: |
+                    curl -s -F chat_id="$CHAT" \
+                         -F caption="${{ inputs.app_name }} — built by BOAT in the cloud" \
+                         -F document=@"${{ steps.apk.outputs.path }}" \
+                         "https://api.telegram.org/bot${TOKEN}/sendDocument"
+          BOAT_FILE_END
+
+          echo "All BOAT files written."
+
+      - name: Commit everything
         run: |
-          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          if [ -z "$APK" ]; then
-            echo "::error::No APK produced"; exit 1
+          git config user.name  "boat-bot"
+          git config user.email "boat@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "boat: bootstrap all files"
+            git push
           fi
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$APK")" >> "$GITHUB_OUTPUT"
-
-      - name: Upload APK to GitHub
-        uses: actions/upload-artifact@v4
-        with:
-          name: BestSelf-APK
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Send APK to Telegram
-        if: success()
-        env:
-          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          APK_PATH: ${{ steps.apk.outputs.path }}
-          APK_NAME: ${{ steps.apk.outputs.name }}
-        run: |
-          set -euo pipefail
-          if [ -z "${BOT_TOKEN:-}" ] || [ -z "${CHAT_ID:-}" ]; then
-            echo "::warning::Telegram secrets missing, skipping notification"
-            exit 0
-          fi
-          curl --fail-with-body -sS \
-            -F document=@"$APK_PATH" \
-            -F caption="✅ Best Self APK Built — ${APK_NAME}" \
-            "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"
