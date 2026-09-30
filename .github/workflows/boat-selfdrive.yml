@@ -1,0 +1,25 @@
+name: BOAT self-drive
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: boat-brain
+  cancel-in-progress: false
+
+jobs:
+  drive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch a self-drive brain run
+        env:
+          GH_TOKEN: ${{ secrets.BOAT_GH_TOKEN }}
+        run: |
+          gh workflow run boat-brain.yml -R "$GITHUB_REPOSITORY" \
+             -f "command=make money anywhere today (self-drive)"
