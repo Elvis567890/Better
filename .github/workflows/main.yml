@@ -87,13 +87,24 @@ jobs:
                     BOAT_CHAT:            __OPEN__ steps.cmd.outputs.chat_id }}
                   run: python -m boat.run_once
 
-                - name: Commit memory
+                - name: Commit memory (race-safe)
                   if: always()
-                  uses: stefanzweifel/git-auto-commit-action@v5
-                  with:
-                    commit_message: "boat: memory"
-                    file_pattern: "boat.db"
-                    skip_dirty_check: false
+                  run: |
+                    set -e
+                    [ -f boat.db ] || { echo "no boat.db"; exit 0; }
+                    cp boat.db /tmp/boat.db
+                    git fetch origin "${GITHUB_REF_NAME:-main}" --depth=1
+                    git reset --hard "origin/${GITHUB_REF_NAME:-main}"
+                    cp /tmp/boat.db boat.db
+                    git config user.name  "boat-bot"
+                    git config user.email "boat@users.noreply.github.com"
+                    git add -f boat.db
+                    if git diff --cached --quiet; then
+                      echo "no memory change"
+                    else
+                      git commit -m "boat: memory"
+                      git push origin "HEAD:${GITHUB_REF_NAME:-main}"
+                    fi
           BOAT_EOF
 
           cat > .github/workflows/boat-trigger.yml <<'BOAT_EOF'
@@ -164,11 +175,24 @@ jobs:
                         )
                     PY
 
-                - name: Persist offset
-                  uses: stefanzweifel/git-auto-commit-action@v5
-                  with:
-                    commit_message: "boat: tg offset"
-                    file_pattern: ".boat/tg_offset"
+                - name: Persist offset (race-safe)
+                  run: |
+                    set -e
+                    [ -f .boat/tg_offset ] || { echo "no offset"; exit 0; }
+                    cp .boat/tg_offset /tmp/tg_offset
+                    git fetch origin "${GITHUB_REF_NAME:-main}" --depth=1
+                    git reset --hard "origin/${GITHUB_REF_NAME:-main}"
+                    mkdir -p .boat
+                    cp /tmp/tg_offset .boat/tg_offset
+                    git config user.name  "boat-bot"
+                    git config user.email "boat@users.noreply.github.com"
+                    git add .boat/tg_offset
+                    if git diff --cached --quiet; then
+                      echo "no offset change"
+                    else
+                      git commit -m "boat: tg offset"
+                      git push origin "HEAD:${GITHUB_REF_NAME:-main}"
+                    fi
           BOAT_EOF
 
           cat > .github/workflows/boat-selfdrive.yml <<'BOAT_EOF'
@@ -264,8 +288,6 @@ jobs:
 
       - name: Substitute placeholder with GitHub expression opener
         run: |
-          # Build the two-character opener at runtime so the literal sequence
-          # never appears in this workflow file.
           OPENER=$(printf '%s%s%s' '$' '{' '{')
           CLOSER='}}'
 
@@ -293,11 +315,32 @@ jobs:
               exit 1
             fi
           done
-
           echo "OK - all four workflows balanced."
 
-      - name: Commit workflows
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "boat: bootstrap workflows"
-          file_pattern: ".github/workflows/boat-*.yml"
+      - name: Commit workflows (race-safe)
+        run: |
+          set -e
+          mkdir -p /tmp/boat-out
+          cp .github/workflows/boat-brain.yml     /tmp/boat-out/
+          cp .github/workflows/boat-trigger.yml   /tmp/boat-out/
+          cp .github/workflows/boat-selfdrive.yml /tmp/boat-out/
+          cp .github/workflows/boat-build-apk.yml /tmp/boat-out/
+
+          git fetch origin "${GITHUB_REF_NAME:-main}" --depth=1
+          git reset --hard "origin/${GITHUB_REF_NAME:-main}"
+
+          cp /tmp/boat-out/boat-brain.yml     .github/workflows/
+          cp /tmp/boat-out/boat-trigger.yml   .github/workflows/
+          cp /tmp/boat-out/boat-selfdrive.yml .github/workflows/
+          cp /tmp/boat-out/boat-build-apk.yml .github/workflows/
+
+          git config user.name  "boat-bot"
+          git config user.email "boat@users.noreply.github.com"
+          git add .github/workflows/boat-*.yml
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit."
+          else
+            git commit -m "boat: bootstrap workflows"
+            git push origin "HEAD:${GITHUB_REF_NAME:-main}"
+          fi
+          echo "Done."
