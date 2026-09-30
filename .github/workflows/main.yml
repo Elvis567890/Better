@@ -6,11 +6,18 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: boat-bootstrap-2
+  cancel-in-progress: false
+
 jobs:
   write:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
 
       - name: Write workflow files (placeholder)
         run: |
@@ -86,8 +93,13 @@ jobs:
                     git config user.name  "boat-bot"
                     git config user.email "boat@users.noreply.github.com"
                     git add -f boat.db 2>/dev/null || true
-                    git diff --cached --quiet || git commit -m "boat: memory"
-                    git push || true
+                    if git diff --cached --quiet; then
+                      echo "no memory change"
+                    else
+                      git commit -m "boat: memory"
+                      git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
+                      git push origin "HEAD:${GITHUB_REF_NAME:-main}" || true
+                    fi
           BOAT_EOF
 
           cat > .github/workflows/boat-trigger.yml <<'BOAT_EOF'
@@ -162,8 +174,13 @@ jobs:
                     git config user.name  "boat-bot"
                     git config user.email "boat@users.noreply.github.com"
                     git add .boat/tg_offset
-                    git diff --cached --quiet || git commit -m "boat: tg offset"
-                    git push || true
+                    if git diff --cached --quiet; then
+                      echo "no offset change"
+                    else
+                      git commit -m "boat: tg offset"
+                      git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
+                      git push origin "HEAD:${GITHUB_REF_NAME:-main}" || true
+                    fi
           BOAT_EOF
 
           cat > .github/workflows/boat-selfdrive.yml <<'BOAT_EOF'
@@ -259,8 +276,8 @@ jobs:
 
       - name: Substitute placeholder with GitHub expression opener
         run: |
-          # Build the two-character opener '$' '{' '{' at runtime so the literal
-          # sequence never appears in this workflow file.
+          # Build the two-character opener at runtime so the literal sequence
+          # never appears in this workflow file.
           OPENER=$(printf '%s%s%s' '$' '{' '{')
           CLOSER='}}'
 
@@ -296,5 +313,10 @@ jobs:
           git config user.name  "boat-bot"
           git config user.email "boat@users.noreply.github.com"
           git add -A
-          git diff --cached --quiet || git commit -m "boat: bootstrap workflows"
-          git push
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "boat: bootstrap workflows"
+          fi
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
+          git push origin "HEAD:${GITHUB_REF_NAME:-main}"
