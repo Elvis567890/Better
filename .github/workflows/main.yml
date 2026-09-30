@@ -14,10 +14,10 @@ jobs:
   write:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.ref_name }}
 
       - name: Write workflow files (placeholder)
         run: |
@@ -53,7 +53,7 @@ jobs:
               timeout-minutes: 30
               steps:
                 - uses: actions/checkout@v4
-                  with: { fetch-depth: 1 }
+                  with: { fetch-depth: 0 }
                 - uses: actions/setup-python@v5
                   with: { python-version: "3.11", cache: pip }
                 - run: pip install -r requirements.txt
@@ -89,17 +89,11 @@ jobs:
 
                 - name: Commit memory
                   if: always()
-                  run: |
-                    git config user.name  "boat-bot"
-                    git config user.email "boat@users.noreply.github.com"
-                    git add -f boat.db 2>/dev/null || true
-                    if git diff --cached --quiet; then
-                      echo "no memory change"
-                    else
-                      git commit -m "boat: memory"
-                      git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
-                      git push origin "HEAD:${GITHUB_REF_NAME:-main}" || true
-                    fi
+                  uses: stefanzweifel/git-auto-commit-action@v5
+                  with:
+                    commit_message: "boat: memory"
+                    file_pattern: "boat.db"
+                    skip_dirty_check: false
           BOAT_EOF
 
           cat > .github/workflows/boat-trigger.yml <<'BOAT_EOF'
@@ -123,6 +117,7 @@ jobs:
               runs-on: ubuntu-latest
               steps:
                 - uses: actions/checkout@v4
+                  with: { fetch-depth: 0 }
 
                 - name: Read offset + poll Telegram
                   env:
@@ -170,17 +165,10 @@ jobs:
                     PY
 
                 - name: Persist offset
-                  run: |
-                    git config user.name  "boat-bot"
-                    git config user.email "boat@users.noreply.github.com"
-                    git add .boat/tg_offset
-                    if git diff --cached --quiet; then
-                      echo "no offset change"
-                    else
-                      git commit -m "boat: tg offset"
-                      git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
-                      git push origin "HEAD:${GITHUB_REF_NAME:-main}" || true
-                    fi
+                  uses: stefanzweifel/git-auto-commit-action@v5
+                  with:
+                    commit_message: "boat: tg offset"
+                    file_pattern: ".boat/tg_offset"
           BOAT_EOF
 
           cat > .github/workflows/boat-selfdrive.yml <<'BOAT_EOF'
@@ -309,14 +297,7 @@ jobs:
           echo "OK - all four workflows balanced."
 
       - name: Commit workflows
-        run: |
-          git config user.name  "boat-bot"
-          git config user.email "boat@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "Nothing to commit."
-          else
-            git commit -m "boat: bootstrap workflows"
-          fi
-          git pull --rebase --autostash origin "${GITHUB_REF_NAME:-main}" || true
-          git push origin "HEAD:${GITHUB_REF_NAME:-main}"
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "boat: bootstrap workflows"
+          file_pattern: ".github/workflows/boat-*.yml"
