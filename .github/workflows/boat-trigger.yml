@@ -1,0 +1,73 @@
+name: BOAT trigger
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: boat-trigger
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Poll Telegram
+        env:
+          TG_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_ALLOWED: ${{ secrets.TELEGRAM_ALLOWED }}
+        run: |
+          mkdir -p .boat
+          OFFSET=0
+          [ -f .boat/tg_offset ] && OFFSET=$(cat .boat/tg_offset)
+          curl -s "https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${OFFSET}&timeout=0" -o updates.json
+          python - <<'PY'
+          import json, os, pathlib
+          data = json.load(open("updates.json"))
+          allowed = set(filter(None, os.environ.get("TG_ALLOWED","").split(",")))
+          last, cmds = 0, []
+          for u in data.get("result", []):
+              last = max(last, u["update_id"])
+              msg = u.get("message") or u.get("channel_post") or {}
+              text = (msg.get("text") or "").strip()
+              chat = str((msg.get("chat") or {}).get("id") or "")
+              if not text or not chat: continue
+              if allowed and chat not in allowed: continue
+              if not text.lower().startswith("boat"): continue
+              cmd = text.split(",",1)[1].strip() if "," in text else text[4:].strip()
+              cmds.append({"cmd": cmd or "make money anywhere today", "chat": chat})
+          pathlib.Path(".boat/tg_offset").write_text(str(last + 1))
+          pathlib.Path(".boat/commands.json").write_text(json.dumps(cmds))
+          print(f"found {len(cmds)} commands")
+          PY
+
+      - name: Dispatch brain per command
+        env:
+          GH_TOKEN: ${{ secrets.BOAT_GH_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          cmds = json.load(open(".boat/commands.json"))
+          repo = os.environ["GITHUB_REPOSITORY"]
+          for c in cmds:
+              subprocess.run(
+                  ["gh","workflow","run","boat-brain.yml","-R", repo,
+                   "-f", f"command={c['cmd']}", "-f", f"chat_id={c['chat']}"],
+                  check=False)
+          PY
+
+      - name: Persist offset
+        run: |
+          git config user.name  "boat-bot"
+          git config user.email "boat@users.noreply.github.com"
+          git add .boat/tg_offset
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "boat: tg offset"
+          git push || true
