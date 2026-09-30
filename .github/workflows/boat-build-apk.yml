@@ -1,0 +1,55 @@
+name: BOAT build APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_dir:      { required: true,  default: "app" }
+      app_name:     { required: false, default: "BoatApp" }
+      package_name: { required: false, default: "com.boat.app" }
+      chat_id:      { required: true }
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+
+      - name: Flutter setup
+        if: hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != ''
+        uses: subosito/flutter-action@v2
+        with: { channel: stable }
+
+      - name: flutter build
+        if: hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != ''
+        working-directory: ${{ inputs.app_dir }}
+        run: |
+          flutter pub get
+          flutter build apk --release \
+            --dart-define=APP_NAME="${{ inputs.app_name }}" \
+            --dart-define=PACKAGE_NAME="${{ inputs.package_name }}"
+
+      - name: Gradle build
+        if: hashFiles(format('{0}/build.gradle', inputs.app_dir)) != ''
+        working-directory: ${{ inputs.app_dir }}
+        run: ./gradlew assembleRelease
+
+      - name: Locate APK
+        id: apk
+        run: echo "path=$(find . -name '*.apk' -type f | head -n1)" >> "$GITHUB_OUTPUT"
+
+      - name: Send to Telegram
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT:  ${{ inputs.chat_id }}
+        run: |
+          curl -s -F chat_id="$CHAT" \
+               -F caption="${{ inputs.app_name }} - built by BOAT" \
+               -F document=@"${{ steps.apk.outputs.path }}" \
+               "https://api.telegram.org/bot${TOKEN}/sendDocument"
