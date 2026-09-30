@@ -16,7 +16,7 @@ jobs:
         run: |
           mkdir -p .github/workflows
 
-          cat > .github/workflows/boat-brain.yml <<'EOF'
+          cat > .github/workflows/boat-brain.yml <<'BOAT_EOF'
           name: BOAT brain
 
           on:
@@ -88,9 +88,9 @@ jobs:
                     git add -f boat.db 2>/dev/null || true
                     git diff --cached --quiet || git commit -m "boat: memory"
                     git push || true
-          EOF
+          BOAT_EOF
 
-          cat > .github/workflows/boat-trigger.yml <<'EOF'
+          cat > .github/workflows/boat-trigger.yml <<'BOAT_EOF'
           name: BOAT trigger
 
           on:
@@ -164,9 +164,9 @@ jobs:
                     git add .boat/tg_offset
                     git diff --cached --quiet || git commit -m "boat: tg offset"
                     git push || true
-          EOF
+          BOAT_EOF
 
-          cat > .github/workflows/boat-selfdrive.yml <<'EOF'
+          cat > .github/workflows/boat-selfdrive.yml <<'BOAT_EOF'
           name: BOAT self-drive
 
           on:
@@ -192,9 +192,9 @@ jobs:
                   run: |
                     gh workflow run boat-brain.yml -R "$GITHUB_REPOSITORY" \
                        -f "command=make money anywhere today (self-drive)"
-          EOF
+          BOAT_EOF
 
-          cat > .github/workflows/boat-build-apk.yml <<'EOF'
+          cat > .github/workflows/boat-build-apk.yml <<'BOAT_EOF'
           name: BOAT build APK
 
           on:
@@ -252,20 +252,44 @@ jobs:
                          -F caption="__OPEN__ inputs.app_name }} - built by BOAT in the cloud" \
                          -F document=@"__OPEN__ steps.apk.outputs.path }}" \
                          "https://api.telegram.org/bot${TOKEN}/sendDocument"
-          EOF
+          BOAT_EOF
 
           echo "Placeholder files written:"
           ls -1 .github/workflows/
 
       - name: Substitute placeholder with GitHub expression opener
         run: |
-          # Build the literal two-char sequence "$" "{" "{" without ever writing "${{"
-          OPEN='$''{''{'
-          for f in .github/workflows/boat-*.yml; do
-            sed -i "s|__OPEN__|${OPEN}|g" "$f"
+          # Build the two-character opener '$' '{' '{' at runtime so the literal
+          # sequence never appears in this workflow file.
+          OPENER=$(printf '%s%s%s' '$' '{' '{')
+          CLOSER='}}'
+
+          for f in .github/workflows/boat-brain.yml \
+                   .github/workflows/boat-trigger.yml \
+                   .github/workflows/boat-selfdrive.yml \
+                   .github/workflows/boat-build-apk.yml ; do
+            sed -i "s|__OPEN__|${OPENER}|g" "$f"
           done
-          echo "After substitution:"
-          grep -n "secrets.BOAT_LLM_KEY" .github/workflows/boat-brain.yml | head -2
+
+          echo "Post-substitution sanity check:"
+          for f in .github/workflows/boat-brain.yml \
+                   .github/workflows/boat-trigger.yml \
+                   .github/workflows/boat-selfdrive.yml \
+                   .github/workflows/boat-build-apk.yml ; do
+            if grep -q '__OPEN__' "$f"; then
+              echo "FAIL: leftover placeholder in $f"
+              exit 1
+            fi
+            opens=$(grep -oF "$OPENER" "$f" | wc -l)
+            closes=$(grep -oF "$CLOSER" "$f" | wc -l)
+            echo "$f  opens=$opens  closes=$closes"
+            if [ "$opens" != "$closes" ]; then
+              echo "FAIL: unbalanced expression in $f"
+              exit 1
+            fi
+          done
+
+          echo "OK - all four workflows balanced."
 
       - name: Commit workflows
         run: |
