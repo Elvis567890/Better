@@ -1,0 +1,126 @@
+name: Write BOAT relay files
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: write-relay
+  cancel-in-progress: false
+
+jobs:
+  write:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write relay files
+        run: |
+          set -e
+          mkdir -p relay
+
+          cat > relay/package.json <<'EOF'
+          {
+            "name": "boat-relay",
+            "version": "1.0.0",
+            "main": "server.js",
+            "scripts": { "start": "node server.js" },
+            "dependencies": { "express": "^4.19.2" }
+          }
+          EOF
+
+          cat > relay/server.js <<'EOF'
+          const express = require('express');
+          const app = express();
+          app.use(express.json());
+          const PORT = process.env.PORT || 10000;
+
+          app.post('/webhook', async (req, res) => {
+            const msg = req.body.message || req.body.channel_post;
+            if (!msg || !msg.text) return res.sendStatus(200);
+
+            const chatId = String(msg.chat.id);
+            const text = msg.text.trim();
+
+            // Optional: restrict to allowed chats
+            const allowed = (process.env.TELEGRAM_ALLOWED || '')
+              .split(',').map(s => s.trim()).filter(Boolean);
+            if (allowed.length && !allowed.includes(chatId)) {
+              return res.sendStatus(200);
+            }
+
+            try {
+              const r = await fetch(
+                `https://api.github.com/repos/${process.env.GITHUB_REPO}/dispatches`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${process.env.BOAT_GH_TOKEN}`,
+                    'Accept': 'application/vnd.github+json',
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'boat-relay'
+                  },
+                  body: JSON.stringify({
+                    event_type: 'boat-command',
+                    client_payload: { command: text, chat_id: chatId }
+                  })
+                }
+              );
+              console.log('dispatched', r.status);
+            } catch (e) {
+              console.error('GitHub dispatch failed:', e);
+            }
+
+            res.sendStatus(200);
+          });
+
+          app.get('/', (req, res) => res.send('BOAT Relay is alive.'));
+
+          app.listen(PORT, () => console.log(`BOAT relay listening on ${PORT}`));
+          EOF
+
+          cat > relay/render.yaml <<'EOF'
+          services:
+            - type: web
+              name: boat-relay
+              env: node
+              plan: free
+              buildCommand: npm install
+              startCommand: node server.js
+              healthCheckPath: /
+          EOF
+
+          cat > relay/README.md <<'EOF'
+          # BOAT Relay
+
+          Forwards Telegram messages to GitHub Actions (`boat-brain.yml`) via
+          repository_dispatch. All BOAT secrets stay in GitHub; this service
+          only needs two env vars.
+
+          ## Deploy on Render
+
+          1. Render dashboard -> New + -> Web Service
+          2. Connect this repo (Elvis567890/Better)
+          3. Root Directory: `relay`
+          4. Build: `npm install`
+          5. Start: `node server.js`
+          6. Plan: Free
+          7. Add env vars:
+             - BOAT_GH_TOKEN = ghp_...
+             - GITHUB_REPO   = Elvis567890/Better
+             - TELEGRAM_ALLOWED = 7683540555 (optional)
+          8. Deploy, then set the Telegram webhook:
+             https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<your-app>.onrender.com/webhook
+          EOF
+
+          echo "Relay files written:"
+          ls -1 relay/
+
+      - name: Commit relay files
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "boat: write relay files for Render"
+          file_pattern: "relay/*"
