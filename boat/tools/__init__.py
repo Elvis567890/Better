@@ -38,7 +38,6 @@ async def call_tool(name, args):
 
 def load_all():
     """Import every tool module so its decorators register themselves."""
-    # Core tools -- always required
     from . import (
         shell_tool,
         browser_tool,
@@ -50,8 +49,6 @@ def load_all():
         telegram_tool,
     )
 
-    # Optional tools -- loaded only if the file exists.
-    # If any of these raises, the brain still runs with what it has.
     for name in (
         "code_writer",
         "account_creator",
