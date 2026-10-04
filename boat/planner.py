@@ -22,8 +22,9 @@ except Exception:
 
 SYSTEM = """You are BOAT - an autonomous hustler agent.
 Reply with a single valid JSON object. No prose. No markdown fences.
-Inside the "reply" field, write a COMPLETE answer. If you list ideas,
-include all of them. Never stop mid-sentence."""
+Inside the "reply" field, write a COMPLETE answer.
+If you sense you're running out of room, wrap up quickly instead of stopping
+mid-sentence. Never end on "for" or "and" - always finish the thought."""
 
 
 PROVIDERS = [
@@ -146,7 +147,7 @@ class Planner:
               f"top={ranked[0] if ranked else 'none'}")
         return ranked[:15]
 
-    async def _chat(self, messages, max_tokens=2000, temperature=0.4):
+    async def _chat(self, messages, max_tokens=3000, temperature=0.4):
         attempts = []
 
         if self._winner:
@@ -185,6 +186,18 @@ class Planner:
                 return text
             except Exception as e:
                 last_error = f"{provider['name']}/{model}: {str(e)[:120]}"
+                continue
+
+        # Second pass with a small delay, in case it was a rate limit
+        await asyncio.sleep(4)
+        for provider, model in attempts[:3]:
+            try:
+                text = await self._call(provider, model, messages,
+                                        max_tokens, temperature)
+                if text and text.strip():
+                    print(f"  [llm] retry OK: {provider['name']}/{model}")
+                    return text
+            except Exception:
                 continue
 
         raise RuntimeError(f"Every model failed. Last: {last_error}")
@@ -230,30 +243,46 @@ class Planner:
             except Exception:
                 return {}
 
-    # ---------- phases ----------
+    # ---------- CLASSIFY ----------
     async def classify(self, message, history):
         hist = "\n".join(f"{h.get('role','?')}: {h.get('text','')}"
                          for h in history[-10:])
         prompt = (
             f'Recent conversation:\n{hist}\n\n'
             f'New message from owner: "{message}"\n\n'
-            'Decide mode:\n'
-            '- If owner is chatting, asking, or brainstorming -> "chat".\n'
-            '- If owner wants you to DO something -> "execute".\n'
-            '- If owner is confirming/rejecting a previous ask -> "confirm".\n\n'
-            'Reply ONLY with this JSON (no prose, no code fences):\n'
+            'CLASSIFY THIS MESSAGE.\n'
+            'Rules:\n'
+            '1. If the message contains any of these words -> mode = "execute":\n'
+            '   build, make, create, generate, design, write, code, program,\n'
+            '   find, search, look up, send, post, register, sign up, check,\n'
+            '   do, just build, just do, go ahead, start, begin, run\n'
+            '2. Short answers that fill in details of a previous EXECUTE\n'
+            '   (e.g. "Android, Flutter", "yes do it", "use English") -> also\n'
+            '   mode = "execute". Carry forward the original task.\n'
+            '3. Only use "chat" for greetings, thanks, or unrelated questions.\n'
+            '4. Only use "confirm" for "yes <name>" or "no <name>" that\n'
+            '   refers to a payment you previously asked about.\n\n'
+            'NEVER ask the owner follow-up questions. Pick sensible defaults:\n'
+            '- Platform for apps: Android\n'
+            '- Framework for apps: Flutter\n'
+            '- Language for content: English\n'
+            '- Currency for money: UGX\n\n'
+            'Reply ONLY with this JSON:\n'
             '{\n'
             '  "mode": "chat" | "execute" | "confirm",\n'
-            '  "reply": "your COMPLETE natural reply here. If you list '
-            'items, include ALL of them. Never stop mid-sentence.",\n'
-            '  "task": "cleaned-up task if mode=execute, else empty",\n'
+            '  "reply": "if chat: full reply. If execute: a short '
+            'acknowledgement such as \\"Building now, APK coming.\\"",\n'
+            '  "task": "if execute: FULL description of what to do, with '
+            'all defaults filled in. If the owner replied with details, '
+            'merge them with the previous task.",\n'
             '  "confirm_action": "yes <name>" or "no <name>" or ""\n'
             '}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
-            max_tokens=2000, temperature=0.3))
+            max_tokens=3000, temperature=0.3))
 
+    # ---------- SCAN ----------
     async def scan(self, command, context):
         prompt = (f'Command: "{command}"\n'
                   f'Memory: {json.dumps(context)[:1500]}\n\n'
@@ -265,10 +294,16 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1500))
 
+    # ---------- DECIDE ----------
     async def decide(self, command, scan, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Scan: {json.dumps(scan)[:1500]}\n'
                   f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
+                  'If the task is to build an app, use code.write_flutter_app '
+                  'and then code.build_apk.\n'
+                  'If the task is to find something, use browser.open.\n'
+                  'If the task is to write text, do NOT call any tool - '
+                  'set the answer in the summary of a done step.\n\n'
                   'Reply ONLY JSON: {"plan_name":"..",'
                   '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
@@ -276,6 +311,7 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1500))
 
+    # ---------- NEXT ----------
     async def next(self, command, mission, last_results, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Mission: {json.dumps(mission)[:1500]}\n'
@@ -288,9 +324,10 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1500))
 
+    # ---------- PIVOT ----------
     async def pivot(self, command, mission, tools):
         prompt = (f'Command: "{command}"\n'
-                  f'Failed: {json.dumps(mission)[:1500]}\n\n'
+                  f'Failed approach: {json.dumps(mission)[:1500]}\n\n'
                   'Reply ONLY JSON: {"plan_name":"..",'
                   '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
@@ -298,6 +335,7 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1500))
 
+    # ---------- REPAIR ----------
     async def repair(self, command, mission, failed, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Failed: {json.dumps(failed)[:1200]}\n\n'
