@@ -5,9 +5,9 @@ from . import tool
 
 
 async def _llm(prompt, max_tokens=8000):
-    base = os.environ.get("BOAT_LLM_BASE", "https://openrouter.ai/api/v1")
+    base = os.environ.get("BOAT_LLM_BASE", "https://api.groq.com/openai/v1")
     key = os.environ["BOAT_LLM_KEY"]
-    model = os.environ.get("BOAT_LLM_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+    model = os.environ.get("BOAT_LLM_MODEL", "llama-3.3-70b-versatile")
     async with httpx.AsyncClient(timeout=180) as c:
         r = await c.post(f"{base}/chat/completions",
                          headers={"Authorization": f"Bearer {key}"},
@@ -24,9 +24,9 @@ async def _llm(prompt, max_tokens=8000):
     "and push it into the repo at apps/<slug>/ so the build workflow can compile it.",
     {"type": "object", "properties": {
         "spec": {"type": "string"},
-        "app_slug": {"type": "string", "description": "folder name, e.g. expense_tracker"},
-        "app_name": {"type": "string", "description": "display name, e.g. ExpenseTracker"},
-        "package_name": {"type": "string", "description": "com.example.app"},
+        "app_slug": {"type": "string"},
+        "app_name": {"type": "string"},
+        "package_name": {"type": "string"},
     }, "required": ["spec", "app_slug"]},
     danger="high",
 )
@@ -49,12 +49,7 @@ Return ONLY a JSON object, no prose, no code fences:
 {{
   "files": {{
     "pubspec.yaml": "...",
-    "lib/main.dart": "...",
-    "android/app/src/main/AndroidManifest.xml": "...",
-    "android/app/build.gradle": "...",
-    "android/build.gradle": "...",
-    "android/settings.gradle": "...",
-    "android/gradle.properties": "..."
+    "lib/main.dart": "..."
   }}
 }}
 
@@ -62,9 +57,8 @@ Rules:
 - Only well-known public packages that exist on pub.dev.
 - Prefer stable versions (no beta/dev).
 - No TODOs. Every screen complete.
-- Flutter 3.22+, Dart 3.4+, minSdk 21.
-- All UI works offline unless the spec says otherwise.
 - main.dart must be self-contained.
+- Use Material 3.
 """
     raw = await _llm(prompt, max_tokens=8000)
     raw = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
@@ -121,4 +115,4 @@ async def build_apk(app_slug, chat_id, app_name=None, package_name=None):
             "package_name": package_name or f"com.boat.{app_slug}",
             "chat_id": str(chat_id),
         },
-)
+    )
