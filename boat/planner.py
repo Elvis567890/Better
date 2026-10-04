@@ -105,7 +105,6 @@ class Planner:
         return None
 
     async def _discover(self, provider):
-        """Fetch the live model list from the provider."""
         url = f"{provider['base']}/models"
         try:
             async with httpx.AsyncClient(timeout=30) as c:
@@ -250,32 +249,30 @@ class Planner:
         prompt = (
             f'Recent conversation:\n{hist}\n\n'
             f'New message from owner: "{message}"\n\n'
-            'CLASSIFY THIS MESSAGE.\n'
+            'CLASSIFY.\n'
             'Rules:\n'
-            '1. If the message contains any of these words -> mode = "execute":\n'
+            '1. If the message contains any of:\n'
             '   build, make, create, generate, design, write, code, program,\n'
             '   find, search, look up, send, post, register, sign up, check,\n'
-            '   do, just build, just do, go ahead, start, begin, run\n'
-            '2. Short answers that fill in details of a previous EXECUTE\n'
-            '   (e.g. "Android, Flutter", "yes do it", "use English") -> also\n'
-            '   mode = "execute". Carry forward the original task.\n'
-            '3. Only use "chat" for greetings, thanks, or unrelated questions.\n'
-            '4. Only use "confirm" for "yes <name>" or "no <name>" that\n'
-            '   refers to a payment you previously asked about.\n\n'
-            'NEVER ask the owner follow-up questions. Pick sensible defaults:\n'
-            '- Platform for apps: Android\n'
-            '- Framework for apps: Flutter\n'
-            '- Language for content: English\n'
-            '- Currency for money: UGX\n\n'
+            '   do, just do it, go ahead, start, begin, run\n'
+            '   -> mode = "execute".\n'
+            '2. Follow-up details of a previous EXECUTE (e.g. "Android, Flutter"\n'
+            '   or "yes do it") -> also "execute", merged with the prior task.\n'
+            '3. Only greetings/questions/small-talk -> "chat".\n'
+            '4. Only "yes <name>" / "no <name>" for a payment -> "confirm".\n\n'
+            'NEVER ask follow-up questions. Pick defaults:\n'
+            '- Mobile app -> Android + Flutter\n'
+            '- Website -> static HTML/CSS/JS\n'
+            '- Document -> English, markdown\n'
+            '- Currency -> UGX\n'
+            '- Language -> English\n\n'
             'Reply ONLY with this JSON:\n'
             '{\n'
             '  "mode": "chat" | "execute" | "confirm",\n'
-            '  "reply": "if chat: full reply. If execute: a short '
-            'acknowledgement such as \\"Building now, APK coming.\\"",\n'
-            '  "task": "if execute: FULL description of what to do, with '
-            'all defaults filled in. If the owner replied with details, '
-            'merge them with the previous task.",\n'
-            '  "confirm_action": "yes <name>" or "no <name>" or ""\n'
+            '  "reply": "chat -> full reply. execute -> short ack like '
+            '\\"On it, will report back.\\"",\n'
+            '  "task": "execute -> FULL description including all defaults",\n'
+            '  "confirm_action": "yes <name>" | "no <name>" | ""\n'
             '}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
@@ -296,16 +293,20 @@ class Planner:
 
     # ---------- DECIDE ----------
     async def decide(self, command, scan, tools):
-        prompt = (f'Command: "{command}"\n'
-                  f'Scan: {json.dumps(scan)[:1500]}\n'
-                  f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
-                  'If the task is to build an app, use code.write_flutter_app '
-                  'and then code.build_apk.\n'
-                  'If the task is to find something, use browser.open.\n'
-                  'If the task is to write text, do NOT call any tool - '
-                  'set the answer in the summary of a done step.\n\n'
-                  'Reply ONLY JSON: {"plan_name":"..",'
-                  '"steps":[{"tool":"..","args":{},"why":".."}]}')
+        prompt = (
+            f'Command: "{command}"\n'
+            f'Scan: {json.dumps(scan)[:1500]}\n'
+            f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
+            'Pick the right tools for the task:\n'
+            '- Build a mobile app -> code.write_flutter_app, then code.build_apk\n'
+            '- Build a website -> make.website\n'
+            '- Write an article/pitch/proposal/README -> make.document\n'
+            '- Write a script -> make.script\n'
+            '- Mixed/unknown artifact -> make.any\n'
+            '- Find something on the web -> browser.open\n'
+            '- Just research/think -> no tools, put the answer in summary\n\n'
+            'Reply ONLY JSON: {"plan_name":"..",'
+            '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
