@@ -1,8 +1,10 @@
 name: BOAT trigger
 
 on:
+  # Every 5 min via GitHub's own cron (as a fallback)
   schedule:
     - cron: "*/5 * * * *"
+  # External trigger via cron-job.org (fires every 2 min)
   workflow_dispatch:
 
 permissions:
@@ -14,12 +16,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  poll:
+  poll-and-run:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Poll Telegram
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install httpx
+          python -m playwright install --with-deps chromium || true
+
+      - name: Poll Telegram and collect new messages
+        id: poll
         env:
           TG_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_ALLOWED: ${{ secrets.TELEGRAM_ALLOWED }}
@@ -27,47 +47,90 @@ jobs:
           mkdir -p .boat
           OFFSET=0
           [ -f .boat/tg_offset ] && OFFSET=$(cat .boat/tg_offset)
+          echo "Polling from offset=$OFFSET"
+
           curl -s "https://api.telegram.org/bot${TG_TOKEN}/getUpdates?offset=${OFFSET}&timeout=0" -o updates.json
+
           python - <<'PY'
           import json, os, pathlib
+
           data = json.load(open("updates.json"))
           allowed = set(filter(None, os.environ.get("TG_ALLOWED","").split(",")))
+
           last, cmds = 0, []
           for u in data.get("result", []):
               last = max(last, u["update_id"])
               msg = u.get("message") or u.get("channel_post") or {}
               text = (msg.get("text") or "").strip()
               chat = str((msg.get("chat") or {}).get("id") or "")
-              if not text or not chat: continue
-              if allowed and chat not in allowed: continue
-              if not text.lower().startswith("boat"): continue
-              cmd = text.split(",",1)[1].strip() if "," in text else text[4:].strip()
-              cmds.append({"cmd": cmd or "make money anywhere today", "chat": chat})
+              if not text or not chat:
+                  continue
+              if allowed and chat not in allowed:
+                  continue
+
+              # Accept "Boat, do X" AND plain messages if we're awaiting input
+              low = text.lower()
+              if low.startswith("boat"):
+                  cmd = text.split(",",1)[1].strip() if "," in text else text[4:].strip()
+                  cmd = cmd or "make money anywhere today"
+              else:
+                  # Not a command — but could be the answer to a question BOAT asked.
+                  # Still forward it; brain.py decides whether to act.
+                  cmd = text
+
+              cmds.append({"cmd": cmd, "chat": chat})
+
           pathlib.Path(".boat/tg_offset").write_text(str(last + 1))
           pathlib.Path(".boat/commands.json").write_text(json.dumps(cmds))
-          print(f"found {len(cmds)} commands")
+          print(f"found {len(cmds)} messages, new offset={last + 1}")
           PY
 
-      - name: Dispatch brain per command
+      - name: Run brain for each message
+        if: hashFiles('.boat/commands.json') != ''
         env:
-          GH_TOKEN: ${{ secrets.BOAT_GH_TOKEN }}
+          BOAT_LLM_KEY:           ${{ secrets.BOAT_LLM_KEY }}
+          BOAT_LLM_BASE:          ${{ secrets.BOAT_LLM_BASE }}
+          BOAT_LLM_MODEL:         ${{ secrets.BOAT_LLM_MODEL }}
+          TELEGRAM_BOT_TOKEN:     ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALLOWED:       ${{ secrets.TELEGRAM_ALLOWED }}
+          GITHUB_TOKEN:           ${{ secrets.BOAT_GH_TOKEN }}
+          GMAIL_USER:             ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD:     ${{ secrets.GMAIL_APP_PASSWORD }}
+          PAY_MOMO:               ${{ secrets.PAY_MOMO }}
+          PAY_MOMO_NAME:          ${{ secrets.PAY_MOMO_NAME }}
+          BOAT_DAILY_GOAL:        "10"
         run: |
           python - <<'PY'
-          import json, os, subprocess
-          cmds = json.load(open(".boat/commands.json"))
-          repo = os.environ["GITHUB_REPOSITORY"]
+          import json, os, subprocess, sys
+
+          try:
+              cmds = json.load(open(".boat/commands.json"))
+          except Exception:
+              cmds = []
+
+          if not cmds:
+              print("no new messages, exiting")
+              sys.exit(0)
+
           for c in cmds:
-              subprocess.run(
-                  ["gh","workflow","run","boat-brain.yml","-R", repo,
-                   "-f", f"command={c['cmd']}", "-f", f"chat_id={c['chat']}"],
-                  check=False)
+              print(f"=== running: {c['cmd']!r} for chat {c['chat']}")
+              env = os.environ.copy()
+              env["BOAT_CMD"]  = c["cmd"]
+              env["BOAT_CHAT"] = c["chat"]
+              r = subprocess.run(["python", "-m", "boat.run_once"], env=env)
+              print(f"    rc={r.returncode}")
           PY
 
-      - name: Persist offset
+      - name: Commit state (memory + telegram offset)
+        if: always()
         run: |
           git config user.name  "boat-bot"
           git config user.email "boat@users.noreply.github.com"
-          git add .boat/tg_offset
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m "boat: tg offset"
-          git push || true
+          git add -f boat.db .boat/tg_offset 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "boat: state @ $(date -u +%FT%TZ)"
+            git pull --rebase --autostash origin "${{ github.ref_name }}" || true
+            git push origin "HEAD:${{ github.ref_name }}" || true
+          fi
