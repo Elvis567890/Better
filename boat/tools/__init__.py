@@ -1,4 +1,9 @@
-"""Tool registry. Every capability BOAT has is a tool here."""
+"""Tool registry. Every capability BOAT has is a tool here.
+
+Each tool module registers itself via the @tool decorator when imported.
+load_all() imports every module once so the registry is populated before
+the brain runs.
+"""
 import inspect
 
 REGISTRY = {}
@@ -19,7 +24,7 @@ def tool(name, desc, params=None, danger="low"):
 
 
 def tool_specs():
-    """Return tool definitions in the shape an LLM expects."""
+    """Return tool definitions in the shape the LLM expects."""
     return [
         {"name": v["name"], "description": v["desc"], "parameters": v["params"]}
         for v in REGISTRY.values()
@@ -38,6 +43,9 @@ async def call_tool(name, args):
 
 def load_all():
     """Import every tool module so its decorators register themselves."""
+
+    # Core tools — always required. If any of these fails to import,
+    # something is fundamentally wrong with the repo.
     from . import (
         shell_tool,
         browser_tool,
@@ -49,6 +57,8 @@ def load_all():
         telegram_tool,
     )
 
+    # Optional tools — loaded only if the file exists. If one is missing,
+    # the brain still runs with whatever it has.
     for name in (
         "code_writer",
         "account_creator",
@@ -59,4 +69,5 @@ def load_all():
         try:
             __import__(f"boat.tools.{name}")
         except Exception:
+            # Missing tool is fine — just skip it silently.
             pass
