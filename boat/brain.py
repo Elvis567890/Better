@@ -84,7 +84,7 @@ class Boat:
         return await self._execute(task, source=source, reply_to=chat)
 
     # ------------------------------------------------------------------
-    # Confirm mode — payment confirmations
+    # Confirm mode - payment confirmations
     # ------------------------------------------------------------------
     async def _handle_confirm(self, decision, chat):
         action = (decision.get("confirm_action") or "").strip()
@@ -115,7 +115,7 @@ class Boat:
                 "result": {"ok": False, "reason": "unrecognized"}}
 
     # ------------------------------------------------------------------
-    # Execute mode — scan, decide, act, pivot
+    # Execute mode - scan, decide, act, pivot
     # ------------------------------------------------------------------
     async def _execute(self, command, source, reply_to):
         mid = uuid.uuid4().hex[:10]
