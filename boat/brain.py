@@ -5,10 +5,6 @@ Chat-first loop. Every message is classified as chat / execute / confirm.
 - Chat: replies immediately.
 - Execute: runs the task loop with scan, decide, act, repair, pivot.
 - Confirm: handles payment confirmations.
-
-Telegram destination is resolved automatically:
-  1. If reply_to is passed in (webhook/dispatch), use it.
-  2. Otherwise fall back to TELEGRAM_ALLOWED from environment.
 """
 import asyncio
 import json
@@ -28,16 +24,34 @@ BATCH = 4
 MAX_ITER = 20
 DAILY_GOAL = float(os.environ.get("BOAT_DAILY_GOAL", "10"))
 
-# First entry of TELEGRAM_ALLOWED (comma-separated) becomes the default chat
 DEFAULT_CHAT = (os.environ.get("TELEGRAM_ALLOWED", "").split(",")[0].strip()
                 or "")
 
 
 def _resolve_chat(reply_to):
-    """Pick a chat id: explicit one wins, else the default from env."""
     if reply_to:
         return str(reply_to).strip()
     return DEFAULT_CHAT
+
+
+def _norm_step(s):
+    """Coerce a step into a dict. Accept dict, str, or anything else."""
+    if isinstance(s, dict):
+        # Some models nest it: {"step": {...}} or {"tool_name": "..."}
+        if "tool" in s and isinstance(s["tool"], str):
+            return s
+        if "tool_name" in s:
+            return {"tool": s["tool_name"], "args": s.get("args") or {}}
+        if "name" in s and "args" in s:
+            return {"tool": s["name"], "args": s.get("args") or {}}
+        # If there's only one string value, use it as the tool name
+        for k, v in s.items():
+            if isinstance(v, str) and "." in v:
+                return {"tool": v, "args": {}}
+        return {"tool": None, "args": s}
+    if isinstance(s, str):
+        return {"tool": s.strip(), "args": {}}
+    return {"tool": None, "args": {}}
 
 
 class Boat:
@@ -46,19 +60,13 @@ class Boat:
         self.memory = memory or Memory()
         self.planner = planner or Planner()
 
-    # ------------------------------------------------------------------
-    # Entry point
-    # ------------------------------------------------------------------
     async def handle(self, command, source="github", reply_to=None):
         chat = _resolve_chat(reply_to)
         log.info("handle: cmd=%r chat=%r", command, chat)
 
-        # record what the owner said
         self.memory.add_chat("owner", command)
-
         history = self.memory.recent_chat(12)
 
-        # 1. classify: chat / execute / confirm
         try:
             decision = await self.planner.classify(command, history)
         except Exception as e:
@@ -69,14 +77,10 @@ class Boat:
         mode = decision.get("mode", "chat")
         reply = decision.get("reply", "")
 
-        # If the LLM returned nothing useful, still reply so the owner
-        # knows the bot is alive and can see what happened.
         if not reply:
-            reply = (
-                f"(LLM returned empty - mode={mode}, "
-                f"keys={sorted(decision.keys())})\n"
-                "Try again, or swap the LLM key to Groq."
-            )
+            reply = ("(LLM returned empty - mode=" + mode +
+                     ", keys=" + str(sorted(decision.keys())) + ")\n"
+                     "Try again, or swap the LLM key.")
 
         await self._say(chat, reply)
         self.memory.add_chat("boat", reply)
@@ -91,12 +95,9 @@ class Boat:
         return await self._execute(task, source=source, reply_to=chat)
 
     # ------------------------------------------------------------------
-    # Confirm mode - payment confirmations
-    # ------------------------------------------------------------------
     async def _handle_confirm(self, decision, chat):
         action = (decision.get("confirm_action") or "").strip()
         low = action.lower()
-
         if low.startswith("yes"):
             client = action.split(" ", 1)[1].strip() if " " in action else ""
             try:
@@ -104,9 +105,8 @@ class Boat:
                                     {"client": client})
             except Exception as e:
                 r = {"ok": False, "error": str(e)}
-            await self._say(chat, f"Confirmed: {r}")
+            await self._say(chat, "Confirmed: " + json.dumps(r))
             return {"mode": "confirm", "result": r}
-
         if low.startswith("no"):
             client = action.split(" ", 1)[1].strip() if " " in action else ""
             try:
@@ -114,15 +114,12 @@ class Boat:
                                     {"client": client})
             except Exception as e:
                 r = {"ok": False, "error": str(e)}
-            await self._say(chat, f"Rejected: {r}")
+            await self._say(chat, "Rejected: " + json.dumps(r))
             return {"mode": "confirm", "result": r}
-
         await self._say(chat, "I didn't understand that confirmation.")
         return {"mode": "confirm",
                 "result": {"ok": False, "reason": "unrecognized"}}
 
-    # ------------------------------------------------------------------
-    # Execute mode - scan, decide, act, repair, pivot
     # ------------------------------------------------------------------
     async def _execute(self, command, source, reply_to):
         mid = uuid.uuid4().hex[:10]
@@ -167,7 +164,15 @@ class Boat:
             return self._finish(mid, "planning_failed",
                                 {"error": str(e)}, reply_to)
 
-        plan = (decision.get("steps") or [])[:BATCH]
+        raw_plan = decision.get("steps") or []
+        plan = [_norm_step(s) for s in raw_plan if s]
+        plan = [s for s in plan if s.get("tool")][:BATCH]
+
+        if not plan:
+            await self._say(reply_to,
+                            "I couldn't work out the first steps. "
+                            "Try rephrasing, or say 'just do it'.")
+            return self._finish(mid, "no_plan", {}, reply_to)
 
         results_all = []
 
@@ -194,25 +199,29 @@ class Boat:
                     "result": _trim(r),
                 })
 
-            # ---- repair: any step failed? try to fix before moving on ----
+            # repair
             failed = [r for r in norm if not r.get("ok", True)]
             if failed and it < MAX_ITER - 1:
                 try:
                     rep = await self.planner.repair(
                         command, mission, failed, tool_specs())
                 except Exception as e:
-                    rep = {"give_up": True, "reason": f"repair failed: {e}"}
+                    rep = {"give_up": True, "reason": "repair failed: " + str(e)}
 
-                if rep.get("steps"):
+                rep_raw = rep.get("steps") or []
+                rep_plan = [_norm_step(s) for s in rep_raw if s]
+                rep_plan = [s for s in rep_plan if s.get("tool")][:BATCH]
+
+                if rep_plan:
                     self.memory.add_lesson(
                         mid, "repair",
-                        f"step failed -> trying: {rep.get('plan_name','')}",
-                    )
+                        "step failed -> trying: " +
+                        str(rep.get("plan_name", "")))
                     await self._say(
                         reply_to,
-                        f"Attempt {it+1} failed. Retrying with a new approach.",
-                    )
-                    plan = rep["steps"][:BATCH]
+                        "Attempt " + str(it + 1) +
+                        " failed. Retrying with a new approach.")
+                    plan = rep_plan
                     continue
 
                 if rep.get("give_up"):
@@ -222,15 +231,14 @@ class Boat:
                         mid, "blocked",
                         {"reason": rep.get("reason"),
                          "results": results_all},
-                        reply_to,
-                    )
+                        reply_to)
 
-            # ---- ask the planner what next ----
+            # next
             try:
                 nxt = await self.planner.next(
                     command, mission, norm, tool_specs())
             except Exception as e:
-                nxt = {"done": True, "summary": f"planner error: {e}"}
+                nxt = {"done": True, "summary": "planner error: " + str(e)}
 
             if nxt.get("ask"):
                 try:
@@ -252,7 +260,9 @@ class Boat:
                         command, mission, tool_specs())
                 except Exception as e:
                     piv = {"steps": [], "error": str(e)}
-                plan = (piv.get("steps") or [])[:BATCH]
+                piv_raw = piv.get("steps") or []
+                plan = [_norm_step(s) for s in piv_raw if s]
+                plan = [s for s in plan if s.get("tool")][:BATCH]
                 continue
 
             if nxt.get("done"):
@@ -262,17 +272,22 @@ class Boat:
                      "results": results_all},
                     reply_to)
 
-            plan = (nxt.get("steps") or [])[:BATCH]
+            nxt_raw = nxt.get("steps") or []
+            plan = [_norm_step(s) for s in nxt_raw if s]
+            plan = [s for s in plan if s.get("tool")][:BATCH]
 
         return self._finish(mid, "max_iterations",
                             {"results": results_all}, reply_to)
 
     # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
     async def _run_step(self, step):
+        if not isinstance(step, dict):
+            return {"tool": None, "ok": False,
+                    "error": f"step is not a dict: {type(step).__name__}"}
         name = step.get("tool")
         args = step.get("args") or {}
+        if not name:
+            return {"tool": None, "ok": False, "error": "step has no tool name"}
         t0 = time.time()
         try:
             res = await call_tool(name, args)
@@ -285,12 +300,10 @@ class Boat:
                     "ms": int((time.time() - t0) * 1000)}
 
     async def _say(self, chat_id, text):
-        """Send to Telegram. Falls back to DEFAULT_CHAT automatically."""
         chat = _resolve_chat(chat_id)
         log.info("BOAT> %s", text)
         if not chat:
-            log.warning("No chat id available; skipping Telegram send. "
-                        "Set TELEGRAM_ALLOWED in GitHub secrets.")
+            log.warning("No chat id available; skipping Telegram send.")
             return
         try:
             r = await call_tool("telegram.send",
@@ -303,9 +316,9 @@ class Boat:
         self.memory.update_mission(
             mid, status=status, money_today=self.memory.money_today())
         summary = json.dumps(payload)[:900]
-        self.memory.add_chat("boat", f"[{status}] {summary}")
+        self.memory.add_chat("boat", "[" + status + "] " + summary)
         asyncio.create_task(self._say(
-            reply_to, f"[{status}] {summary}"))
+            reply_to, "[" + status + "] " + summary))
         return {"mission_id": mid, "status": status, **payload}
 
 
