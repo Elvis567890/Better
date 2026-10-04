@@ -1,28 +1,21 @@
 const express = require('express');
 const app = express();
-
 app.use(express.json());
 
-// Log every incoming request so we can see what Telegram sends
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
   next();
 });
 
-// Root — health check + sanity
 app.get('/', (req, res) => res.send('BOAT Relay is alive.'));
 
-// Webhook — accept both GET (for testing) and POST (for Telegram)
 app.all('/webhook', async (req, res) => {
   console.log('WEBHOOK HIT', req.method);
-  const msg = (req.body && (req.body.message || req.body.channel_post)) || null;
-
+  const msg = req.body && (req.body.message || req.body.channel_post);
   if (msg && msg.text) {
     const chatId = String(msg.chat.id);
     const text = msg.text.trim();
-
-    const allowed = (process.env.TELEGRAM_ALLOWED || '')
-      .split(',').map(s => s.trim()).filter(Boolean);
+    const allowed = (process.env.TELEGRAM_ALLOWED || '').split(',').map(s => s.trim()).filter(Boolean);
     if (!allowed.length || allowed.includes(chatId)) {
       try {
         const r = await fetch(
@@ -42,12 +35,9 @@ app.all('/webhook', async (req, res) => {
           }
         );
         console.log('dispatched', r.status);
-      } catch (e) {
-        console.error('dispatch failed:', e.message);
-      }
+      } catch (e) { console.error('dispatch failed:', e.message); }
     }
   }
-
   res.sendStatus(200);
 });
 
