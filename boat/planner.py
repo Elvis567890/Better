@@ -1,112 +1,182 @@
-"""LLM planner. Auto-detects Gemini (native) vs OpenAI-compatible providers."""
+"""LLM planner that auto-detects the provider from the key.
+
+You provide ONE key (BOAT_LLM_KEY). That's all.
+- It reads the key prefix to know which provider it is.
+- It picks the correct base URL automatically.
+- It picks a working free model automatically.
+- It remembers the winner in boat.db so next time is instant.
+"""
 import json
 import os
 import re
-
+import asyncio
 import httpx
 
+try:
+    from .memory import Memory
+except Exception:
+    Memory = None
 
-SYSTEM = """You are BOAT - an autonomous hustler agent that works for one
-owner. You think like a hustler: ZERO-COST and MONEY-TODAY beat future money.
-You never wait on a human unless a real human decision is required.
 
-Modes:
-  CHAT      - discuss, answer, refine what the owner wants
-  EXECUTE   - the owner told you to do something; run the task loop
-  CONFIRM   - the owner is confirming or rejecting something you asked about
+SYSTEM = """You are BOAT - an autonomous hustler agent. Think like a hustler:
+zero-cost and money-today beat future money. Emit JSON only."""
 
-Emit JSON only. No prose outside the JSON object."""
+
+# Provider recipes — each one knows its key prefix, base URL, and candidate models.
+# Order here = order of fallback if a provider fails.
+PROVIDERS = [
+    {
+        "name": "cerebras",
+        "prefix": "csk-",
+        "base": "https://api.cerebras.ai/v1",
+        "models": ["llama-3.3-70b", "llama3.1-8b"],
+    },
+    {
+        "name": "groq",
+        "prefix": "gsk_",
+        "base": "https://api.groq.com/openai/v1",
+        "models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+    },
+    {
+        "name": "openrouter",
+        "prefix": "sk-or-v1-",
+        "base": "https://openrouter.ai/api/v1",
+        "models": [
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "deepseek/deepseek-chat-v3.1:free",
+            "google/gemini-2.0-flash-exp:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "mistralai/mistral-small-3.1-24b-instruct:free",
+        ],
+    },
+    {
+        "name": "sambanova",
+        "prefix": "sb_",
+        "base": "https://api.sambanova.ai/v1",
+        "models": ["Meta-Llama-3.3-70B-Instruct"],
+    },
+    {
+        "name": "aimlapi",
+        "prefix": "24b",  # AIMLAPI keys often start this way
+        "base": "https://api.aimlapi.com/v1",
+        "models": ["inclusionai/ling-3.0-tiny"],
+    },
+]
 
 
 class Planner:
     def __init__(self, base=None, key=None, model=None):
-        self.base = (base or os.environ.get(
-            "BOAT_LLM_BASE", "https://openrouter.ai/api/v1")).rstrip("/")
-        self.key = (key
-                    or os.environ.get("BOAT_LLM_KEY")
-                    or os.environ.get("OPENAI_API_KEY"))
-        self.model = model or os.environ.get(
-            "BOAT_LLM_MODEL", "gemini-flash-latest")
+        # Collect every key we can find (BOAT_LLM_KEY plus per-provider names).
+        keys = []
+        for env in ("BOAT_LLM_KEY", "CEREBRAS_KEY", "GROQ_KEY",
+                    "OPENROUTER_KEY", "SAMBANOVA_KEY", "AIMLAPI_KEY"):
+            k = os.environ.get(env)
+            if k:
+                keys.append(k.strip())
 
-        if "generativelanguage.googleapis.com" in self.base:
-            self.provider = "gemini"
-        else:
-            self.provider = "openai"
+        if key:
+            keys.insert(0, key.strip())
 
-    # ------------------------------------------------------------------
-    # Provider dispatch
-    # ------------------------------------------------------------------
+        if not keys:
+            raise RuntimeError(
+                "No LLM key found. Set BOAT_LLM_KEY in GitHub secrets.")
+
+        # Build a chain: for each key, detect provider + all its models.
+        self.chain = []
+        seen_bases = set()
+        for k in keys:
+            provider = self._detect_from_key(k)
+            if not provider:
+                continue
+            if provider["base"] in seen_bases:
+                continue
+            seen_bases.add(provider["base"])
+            self.chain.append({
+                "name": provider["name"],
+                "base": provider["base"],
+                "key": k,
+                "models": list(provider["models"]),
+            })
+
+        if not self.chain:
+            raise RuntimeError(
+                "Could not recognize any key prefix. Supported: "
+                "csk- (Cerebras), gsk_ (Groq), sk-or-v1- (OpenRouter), "
+                "sb_ (SambaNova).")
+
+        # Memory to remember the winner.
+        self._memo = Memory() if Memory else None
+        self._winner = None
+        if self._memo:
+            try:
+                self._winner = self._memo.kv_get("llm.winner")
+            except Exception:
+                self._winner = None
+
+    @staticmethod
+    def _detect_from_key(key):
+        for p in PROVIDERS:
+            if key.startswith(p["prefix"]):
+                return p
+        return None
+
     async def _chat(self, messages, max_tokens=1200, temperature=0.4):
-        if self.provider == "gemini":
-            return await self._gemini(messages, max_tokens, temperature)
-        return await self._openai(messages, max_tokens, temperature)
+        attempts = []
 
-    async def _openai(self, messages, max_tokens, temperature):
-        url = f"{self.base}/chat/completions"
+        # winner first
+        if self._winner:
+            for c in self.chain:
+                if c["base"] == self._winner.get("base"):
+                    attempts.append((c, self._winner["model"]))
+                    break
+
+        # then everyone else
+        for c in self.chain:
+            for m in c["models"]:
+                if (c, m) not in attempts:
+                    attempts.append((c, m))
+
+        last_error = None
+        for provider, model in attempts:
+            try:
+                text = await self._call(provider, model, messages,
+                                        max_tokens, temperature)
+                if self._memo and (not self._winner
+                                   or self._winner.get("base") != provider["base"]
+                                   or self._winner.get("model") != model):
+                    try:
+                        self._memo.kv_set("llm.winner",
+                                          {"base": provider["base"],
+                                           "model": model,
+                                           "name": provider["name"]})
+                    except Exception:
+                        pass
+                    self._winner = {"base": provider["base"], "model": model}
+                return text
+            except Exception as e:
+                last_error = f"{provider['name']}/{model}: {str(e)[:120]}"
+                continue
+
+        raise RuntimeError(f"Every provider failed. Last: {last_error}")
+
+    async def _call(self, provider, model, messages, max_tokens, temperature):
         async with httpx.AsyncClient(timeout=120) as c:
             r = await c.post(
-                url,
-                headers={"Authorization": f"Bearer {self.key}"},
+                f"{provider['base']}/chat/completions",
+                headers={"Authorization": f"Bearer {provider['key']}"},
                 json={
-                    "model": self.model,
+                    "model": model,
                     "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                     "response_format": {"type": "json_object"},
                 },
             )
+            if r.status_code in (429, 503):
+                await asyncio.sleep(2)
+                raise RuntimeError(f"{r.status_code} busy")
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
-
-    async def _gemini(self, messages, max_tokens, temperature):
-        system_text = ""
-        contents = []
-        for m in messages:
-            role = m.get("role", "user")
-            content = m.get("content", "")
-            if role == "system":
-                system_text += content + "\n"
-            else:
-                g_role = "user" if role == "user" else "model"
-                contents.append({
-                    "role": g_role,
-                    "parts": [{"text": content}],
-                })
-
-        base = self.base
-        if base.endswith("/openai"):
-            base = base[: -len("/openai")]
-
-        url = f"{base}/models/{self.model}:generateContent"
-
-        body = {
-            "contents": contents,
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": max_tokens,
-                "responseMimeType": "application/json",
-            },
-        }
-        if system_text.strip():
-            body["systemInstruction"] = {
-                "parts": [{"text": system_text.strip()}],
-            }
-
-        async with httpx.AsyncClient(timeout=120) as c:
-            r = await c.post(
-                url,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-goog-api-key": self.key,
-                },
-                json=body,
-            )
-            if r.status_code >= 400:
-                raise RuntimeError(
-                    f"gemini {r.status_code}: {r.text[:300]}"
-                )
-            j = r.json()
-            return j["candidates"][0]["content"]["parts"][0]["text"]
 
     @staticmethod
     def _json(s):
@@ -116,121 +186,61 @@ class Planner:
             m = re.search(r"\{.*\}", s, re.S)
             return json.loads(m.group(0)) if m else {}
 
-    # ------------------------------------------------------------------
-    # Classify
-    # ------------------------------------------------------------------
+    # ---------- phases ----------
     async def classify(self, message, history):
-        hist = "\n".join(
-            f"{h.get('role','?')}: {h.get('text','')}" for h in history[-10:]
-        )
-        prompt = f"""Recent conversation:
-{hist}
-
-New message from owner: "{message}"
-
-Decide:
-- Chatting, asking, brainstorming -> mode = "chat" with short reply.
-- Told to DO something (build, find, send, make money, register, check,
-  write, post, search, create, collect, sell, pitch, contact) -> "execute".
-- Confirming/rejecting a previous ask ("yes", "no", "yes <name>") -> "confirm".
-
+        hist = "\n".join(f"{h.get('role','?')}: {h.get('text','')}"
+                         for h in history[-10:])
+        prompt = f"""Conversation:\n{hist}\n\nNew message: "{message}"\n
 Return JSON only:
-{{
-  "mode": "chat" | "execute" | "confirm",
-  "reply": "short natural reply",
-  "task": "if mode=execute, cleaned-up task",
-  "confirm_action": "yes <name>" | "no <name>" | ""
-}}"""
-        raw = await self._chat(
+{{"mode": "chat"|"execute"|"confirm", "reply": "...",
+  "task": "...", "confirm_action": "..."}}"""
+        return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
-            max_tokens=600, temperature=0.3,
-        )
-        return self._json(raw)
+            max_tokens=600, temperature=0.3))
 
-    # ------------------------------------------------------------------
-    # Scan
-    # ------------------------------------------------------------------
     async def scan(self, command, context):
-        prompt = f"""PHASE: SCAN.
-Command: "{command}"
-Memory: {json.dumps(context)[:3000]}
-
-List 5 concrete today-opportunities on the internet where THIS command can
-produce a result or make money TODAY at zero cost.
-
-Return JSON:
-{{"resources": [...],
-  "today_opportunities": [
-    {{"title": "..", "url": "..", "pays_today": true, "cost": 0,
-      "eta_hours": 1, "notes": ".."}}
-  ]}}"""
-        raw = await self._chat(
+        prompt = f"""SCAN. Command: "{command}"
+Memory: {json.dumps(context)[:2500]}
+Return JSON: {{"resources":[],"today_opportunities":[
+  {{"title":"..","url":"..","pays_today":true,"cost":0,"eta_hours":1}}]}}"""
+        return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-        )
-        return self._json(raw)
+             {"role": "user", "content": prompt}]))
 
-    # ------------------------------------------------------------------
-    # Decide
-    # ------------------------------------------------------------------
     async def decide(self, command, scan, tools):
-        prompt = f"""PHASE: DECIDE.
-Command: "{command}"
-Scan: {json.dumps(scan)[:4000]}
+        prompt = f"""DECIDE. Command: "{command}"
+Scan: {json.dumps(scan)[:2500]}
 Tools: {json.dumps([t["name"] for t in tools])}
-
-Pick the FIRST parallel batch (max 4 steps) toward the goal.
-- Build task -> code.write_flutter_app then code.build_apk
-- Find task -> browser.open + research tools
-- Write task -> return no tools and put the text in a done step.
-
-Return JSON:
-{{"plan_name": "...",
-  "steps": [{{"tool": "...", "args": {{}}, "why": "..."}}]}}"""
-        raw = await self._chat(
+Return JSON: {{"plan_name":"..","steps":[{{"tool":"..","args":{{}}}}]}}"""
+        return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-        )
-        return self._json(raw)
+             {"role": "user", "content": prompt}]))
 
-    # ------------------------------------------------------------------
-    # Next
-    # ------------------------------------------------------------------
     async def next(self, command, mission, last_results, tools):
-        prompt = f"""PHASE: NEXT.
-Command: "{command}"
-Mission: {json.dumps(mission)[:4000]}
-Last results: {json.dumps(last_results)[:4000]}
-Tools: {json.dumps([t["name"] for t in tools])}
-
+        prompt = f"""NEXT. Command: "{command}"
+Mission: {json.dumps(mission)[:2500]}
+Results: {json.dumps(last_results)[:2500]}
 Return one of:
-  {{"done": true, "summary": "what was accomplished"}}
-  {{"steps": [{{"tool": "...", "args": {{}}, "why": "..."}}]}}
-  {{"pivot": true, "reason": "why Plan A failed"}}
-  {{"ask": "question for the owner"}}"""
-        raw = await self._chat(
+  {{"done":true,"summary":".."}} / {{"steps":[..]}} /
+  {{"pivot":true,"reason":".."}} / {{"ask":".."}}"""
+        return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-        )
-        return self._json(raw)
+             {"role": "user", "content": prompt}]))
 
-    # ------------------------------------------------------------------
-    # Pivot
-    # ------------------------------------------------------------------
     async def pivot(self, command, mission, tools):
-        prompt = f"""PHASE: PIVOT.
-Command: "{command}"
-Failed approach: {json.dumps(mission)[:3500]}
-Tools: {json.dumps([t["name"] for t in tools])}
-
-Plan A did not work. Invent Plan B - a DIFFERENT path to the same goal.
-
-Return JSON:
-{{"plan_name": "...",
-  "steps": [{{"tool": "...", "args": {{}}, "why": "..."}}]}}"""
-        raw = await self._chat(
+        prompt = f"""PIVOT. Command: "{command}"
+Failed: {json.dumps(mission)[:2500]}
+Return JSON: {{"plan_name":"..","steps":[{{"tool":"..","args":{{}}}}]}}"""
+        return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-        )
-        return self._json(raw)
+             {"role": "user", "content": prompt}]))
+
+    async def repair(self, command, mission, failed, tools):
+        prompt = f"""REPAIR. Command: "{command}"
+Failed: {json.dumps(failed)[:2000]}
+Return JSON: {{"plan_name":"..","steps":[...]}}
+OR {{"give_up":true,"reason":".."}}"""
+        return self._json(await self._chat(
+            [{"role": "system", "content": SYSTEM},
+             {"role": "user", "content": prompt}]))
