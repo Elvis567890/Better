@@ -1,10 +1,10 @@
-"""LLM planner that auto-detects the provider from the key.
+"""LLM planner with auto-detected provider AND auto-discovered models.
 
-You provide ONE key (BOAT_LLM_KEY). That's all.
-- It reads the key prefix to know which provider it is.
-- It picks the correct base URL automatically.
-- It picks a working free model automatically.
-- It remembers the winner in boat.db so next time is instant.
+- You give it ONE key.
+- It detects the provider from the key prefix.
+- It asks the provider "what models do you have?" at runtime.
+- It picks a working one and remembers it.
+- No hardcoded model names. Nothing to go stale.
 """
 import json
 import os
@@ -18,93 +18,71 @@ except Exception:
     Memory = None
 
 
-SYSTEM = """You are BOAT - an autonomous hustler agent. Think like a hustler:
-zero-cost and money-today beat future money. Emit JSON only."""
+SYSTEM = """You are BOAT - an autonomous hustler agent. Emit JSON only."""
 
 
-# Provider recipes — each one knows its key prefix, base URL, and candidate models.
-# Order here = order of fallback if a provider fails.
+# Provider recipes. `models_endpoint` = where to fetch the live list.
 PROVIDERS = [
     {
         "name": "cerebras",
         "prefix": "csk-",
         "base": "https://api.cerebras.ai/v1",
-        "models": ["llama-3.3-70b", "llama3.1-8b"],
+        "fallback_models": ["llama-3.3-70b", "llama3.1-8b"],
     },
     {
         "name": "groq",
         "prefix": "gsk_",
         "base": "https://api.groq.com/openai/v1",
-        "models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+        "fallback_models": ["llama-3.3-70b-versatile",
+                            "llama-3.1-8b-instant"],
     },
     {
         "name": "openrouter",
         "prefix": "sk-or-v1-",
         "base": "https://openrouter.ai/api/v1",
-        "models": [
+        "fallback_models": [
             "meta-llama/llama-3.3-70b-instruct:free",
-            "deepseek/deepseek-chat-v3.1:free",
-            "google/gemini-2.0-flash-exp:free",
-            "qwen/qwen-2.5-72b-instruct:free",
-            "mistralai/mistral-small-3.1-24b-instruct:free",
+            "deepseek/deepseek-chat:free",
         ],
-    },
-    {
-        "name": "sambanova",
-        "prefix": "sb_",
-        "base": "https://api.sambanova.ai/v1",
-        "models": ["Meta-Llama-3.3-70B-Instruct"],
+        # OpenRouter's public models endpoint — we filter for ":free"
+        "discover": True,
     },
     {
         "name": "aimlapi",
-        "prefix": "24b",  # AIMLAPI keys often start this way
+        "prefix": "24b",
         "base": "https://api.aimlapi.com/v1",
-        "models": ["inclusionai/ling-3.0-tiny"],
+        "fallback_models": ["inclusionai/ling-3.0-tiny"],
     },
 ]
 
 
 class Planner:
     def __init__(self, base=None, key=None, model=None):
-        # Collect every key we can find (BOAT_LLM_KEY plus per-provider names).
         keys = []
         for env in ("BOAT_LLM_KEY", "CEREBRAS_KEY", "GROQ_KEY",
-                    "OPENROUTER_KEY", "SAMBANOVA_KEY", "AIMLAPI_KEY"):
+                    "OPENROUTER_KEY", "AIMLAPI_KEY"):
             k = os.environ.get(env)
             if k:
                 keys.append(k.strip())
-
         if key:
             keys.insert(0, key.strip())
-
         if not keys:
-            raise RuntimeError(
-                "No LLM key found. Set BOAT_LLM_KEY in GitHub secrets.")
+            raise RuntimeError("No LLM key found. Set BOAT_LLM_KEY.")
 
-        # Build a chain: for each key, detect provider + all its models.
         self.chain = []
-        seen_bases = set()
+        seen = set()
         for k in keys:
-            provider = self._detect_from_key(k)
-            if not provider:
+            p = self._detect(k)
+            if not p or p["base"] in seen:
                 continue
-            if provider["base"] in seen_bases:
-                continue
-            seen_bases.add(provider["base"])
-            self.chain.append({
-                "name": provider["name"],
-                "base": provider["base"],
-                "key": k,
-                "models": list(provider["models"]),
-            })
+            seen.add(p["base"])
+            self.chain.append({**p, "key": k,
+                               "models": None})  # populated lazily
 
         if not self.chain:
-            raise RuntimeError(
-                "Could not recognize any key prefix. Supported: "
-                "csk- (Cerebras), gsk_ (Groq), sk-or-v1- (OpenRouter), "
-                "sb_ (SambaNova).")
+            raise RuntimeError("Key prefix not recognized. Supported: "
+                               "csk-, gsk_, sk-or-v1-, 24b")
 
-        # Memory to remember the winner.
         self._memo = Memory() if Memory else None
         self._winner = None
         if self._memo:
@@ -114,11 +92,34 @@ class Planner:
                 self._winner = None
 
     @staticmethod
-    def _detect_from_key(key):
+    def _detect(key):
         for p in PROVIDERS:
             if key.startswith(p["prefix"]):
-                return p
+                return dict(p)
         return None
+
+    async def _discover_models(self, provider):
+        """Ask the provider what models it has. Return ones we can use."""
+        base = provider["base"]
+        key = provider["key"]
+
+        if provider.get("discover"):
+            # OpenRouter: fetch all, keep the free ones
+            try:
+                async with httpx.AsyncClient(timeout=30) as c:
+                    r = await c.get(f"{base}/models",
+                                    headers={"Authorization": f"Bearer {key}"})
+                    r.raise_for_status()
+                    data = r.json().get("data", [])
+                    free = [m["id"] for m in data
+                            if m.get("id", "").endswith(":free")]
+                    if free:
+                        return free[:10]
+            except Exception:
+                pass
+
+        # Fallback: use the hardcoded list for this provider
+        return list(provider.get("fallback_models", []))
 
     async def _chat(self, messages, max_tokens=1200, temperature=0.4):
         attempts = []
@@ -130,8 +131,10 @@ class Planner:
                     attempts.append((c, self._winner["model"]))
                     break
 
-        # then everyone else
+        # build the full list of (provider, model) attempts
         for c in self.chain:
+            if c["models"] is None:
+                c["models"] = await self._discover_models(c)
             for m in c["models"]:
                 if (c, m) not in attempts:
                     attempts.append((c, m))
@@ -141,14 +144,11 @@ class Planner:
             try:
                 text = await self._call(provider, model, messages,
                                         max_tokens, temperature)
-                if self._memo and (not self._winner
-                                   or self._winner.get("base") != provider["base"]
-                                   or self._winner.get("model") != model):
+                if self._memo:
                     try:
                         self._memo.kv_set("llm.winner",
                                           {"base": provider["base"],
-                                           "model": model,
-                                           "name": provider["name"]})
+                                           "model": model})
                     except Exception:
                         pass
                     self._winner = {"base": provider["base"], "model": model}
@@ -190,57 +190,58 @@ class Planner:
     async def classify(self, message, history):
         hist = "\n".join(f"{h.get('role','?')}: {h.get('text','')}"
                          for h in history[-10:])
-        prompt = f"""Conversation:\n{hist}\n\nNew message: "{message}"\n
-Return JSON only:
-{{"mode": "chat"|"execute"|"confirm", "reply": "...",
-  "task": "...", "confirm_action": "..."}}"""
+        prompt = (f'Conversation:\n{hist}\n\nNew message: "{message}"\n'
+                  'Return JSON only: {"mode":"chat"|"execute"|"confirm",'
+                  '"reply":"...","task":"...","confirm_action":"..."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
             max_tokens=600, temperature=0.3))
 
     async def scan(self, command, context):
-        prompt = f"""SCAN. Command: "{command}"
-Memory: {json.dumps(context)[:2500]}
-Return JSON: {{"resources":[],"today_opportunities":[
-  {{"title":"..","url":"..","pays_today":true,"cost":0,"eta_hours":1}}]}}"""
+        prompt = (f'SCAN. Command: "{command}"\n'
+                  f'Memory: {json.dumps(context)[:2000]}\n'
+                  'Return JSON: {"resources":[],"today_opportunities":['
+                  '{"title":"..","url":"..","pays_today":true,"cost":0}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}]))
 
     async def decide(self, command, scan, tools):
-        prompt = f"""DECIDE. Command: "{command}"
-Scan: {json.dumps(scan)[:2500]}
-Tools: {json.dumps([t["name"] for t in tools])}
-Return JSON: {{"plan_name":"..","steps":[{{"tool":"..","args":{{}}}}]}}"""
+        prompt = (f'DECIDE. Command: "{command}"\n'
+                  f'Scan: {json.dumps(scan)[:2000]}\n'
+                  f'Tools: {json.dumps([t["name"] for t in tools])}\n'
+                  'Return JSON: {"plan_name":"..",'
+                  '"steps":[{"tool":"..","args":{}}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}]))
 
     async def next(self, command, mission, last_results, tools):
-        prompt = f"""NEXT. Command: "{command}"
-Mission: {json.dumps(mission)[:2500]}
-Results: {json.dumps(last_results)[:2500]}
-Return one of:
-  {{"done":true,"summary":".."}} / {{"steps":[..]}} /
-  {{"pivot":true,"reason":".."}} / {{"ask":".."}}"""
+        prompt = (f'NEXT. Command: "{command}"\n'
+                  f'Mission: {json.dumps(mission)[:2000]}\n'
+                  f'Results: {json.dumps(last_results)[:2000]}\n'
+                  'Return JSON: {"done":true,"summary":".."} '
+                  'or {"steps":[...]} or {"pivot":true,"reason":".."} '
+                  'or {"ask":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}]))
 
     async def pivot(self, command, mission, tools):
-        prompt = f"""PIVOT. Command: "{command}"
-Failed: {json.dumps(mission)[:2500]}
-Return JSON: {{"plan_name":"..","steps":[{{"tool":"..","args":{{}}}}]}}"""
+        prompt = (f'PIVOT. Command: "{command}"\n'
+                  f'Failed: {json.dumps(mission)[:2000]}\n'
+                  'Return JSON: {"plan_name":"..",'
+                  '"steps":[{"tool":"..","args":{}}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}]))
 
     async def repair(self, command, mission, failed, tools):
-        prompt = f"""REPAIR. Command: "{command}"
-Failed: {json.dumps(failed)[:2000]}
-Return JSON: {{"plan_name":"..","steps":[...]}}
-OR {{"give_up":true,"reason":".."}}"""
+        prompt = (f'REPAIR. Command: "{command}"\n'
+                  f'Failed: {json.dumps(failed)[:1500]}\n'
+                  'Return JSON: {"plan_name":"..","steps":[...]} '
+                  'or {"give_up":true,"reason":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}]))
