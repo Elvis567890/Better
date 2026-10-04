@@ -21,7 +21,9 @@ except Exception:
 
 
 SYSTEM = """You are BOAT - an autonomous hustler agent.
-Reply with a single valid JSON object. No prose. No markdown fences."""
+Reply with a single valid JSON object. No prose. No markdown fences.
+Inside the "reply" field, write a COMPLETE answer. If you list ideas,
+include all of them. Never stop mid-sentence."""
 
 
 PROVIDERS = [
@@ -29,7 +31,6 @@ PROVIDERS = [
         "name": "groq",
         "prefix": "gsk_",
         "base": "https://api.groq.com/openai/v1",
-        # names we prefer if they exist in the live list
         "preferred": [
             "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant",
@@ -47,7 +48,7 @@ PROVIDERS = [
         "name": "openrouter",
         "prefix": "sk-or-v1-",
         "base": "https://openrouter.ai/api/v1",
-        "preferred": [],  # we filter by :free
+        "preferred": [],
         "free_only": True,
     },
     {
@@ -116,7 +117,6 @@ class Planner:
             print(f"  [discover] {provider['name']} /models failed: {e}")
             return []
 
-        # OpenAI-style response
         items = data.get("data") or data.get("models") or []
         ids = []
         for m in items:
@@ -125,16 +125,15 @@ class Planner:
                 continue
             if provider.get("free_only") and not mid.endswith(":free"):
                 continue
-            # skip obviously non-chat models
             low = mid.lower()
-            if any(x in low for x in ("whisper", "tts", "embed", "vision-only")):
+            if any(x in low for x in ("whisper", "tts", "embed",
+                                      "vision-only", "guard")):
                 continue
             ids.append(mid)
 
         if not ids:
             return []
 
-        # rank: preferred first (in order), then everything else
         pref = provider.get("preferred", [])
         ranked = []
         for want in pref:
@@ -147,7 +146,7 @@ class Planner:
               f"top={ranked[0] if ranked else 'none'}")
         return ranked[:15]
 
-    async def _chat(self, messages, max_tokens=1200, temperature=0.4):
+    async def _chat(self, messages, max_tokens=2000, temperature=0.4):
         attempts = []
 
         if self._winner:
@@ -235,16 +234,25 @@ class Planner:
     async def classify(self, message, history):
         hist = "\n".join(f"{h.get('role','?')}: {h.get('text','')}"
                          for h in history[-10:])
-        prompt = (f'Conversation:\n{hist}\n\nNew message: "{message}"\n\n'
-                  'Reply with ONLY this JSON:\n'
-                  '{"mode":"chat"|"execute"|"confirm",'
-                  '"reply":"short natural reply",'
-                  '"task":"clean task if execute",'
-                  '"confirm_action":""}')
+        prompt = (
+            f'Recent conversation:\n{hist}\n\n'
+            f'New message from owner: "{message}"\n\n'
+            'Decide mode:\n'
+            '- If owner is chatting, asking, or brainstorming -> "chat".\n'
+            '- If owner wants you to DO something -> "execute".\n'
+            '- If owner is confirming/rejecting a previous ask -> "confirm".\n\n'
+            'Reply ONLY with this JSON (no prose, no code fences):\n'
+            '{\n'
+            '  "mode": "chat" | "execute" | "confirm",\n'
+            '  "reply": "your COMPLETE natural reply here. If you list '
+            'items, include ALL of them. Never stop mid-sentence.",\n'
+            '  "task": "cleaned-up task if mode=execute, else empty",\n'
+            '  "confirm_action": "yes <name>" or "no <name>" or ""\n'
+            '}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
-            max_tokens=600, temperature=0.3))
+            max_tokens=2000, temperature=0.3))
 
     async def scan(self, command, context):
         prompt = (f'Command: "{command}"\n'
@@ -254,7 +262,8 @@ class Planner:
                   '"eta_hours":1}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}]))
+             {"role": "user", "content": prompt}],
+            max_tokens=1500))
 
     async def decide(self, command, scan, tools):
         prompt = (f'Command: "{command}"\n'
@@ -264,7 +273,8 @@ class Planner:
                   '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}]))
+             {"role": "user", "content": prompt}],
+            max_tokens=1500))
 
     async def next(self, command, mission, last_results, tools):
         prompt = (f'Command: "{command}"\n'
@@ -275,7 +285,8 @@ class Planner:
                   'or {"ask":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}]))
+             {"role": "user", "content": prompt}],
+            max_tokens=1500))
 
     async def pivot(self, command, mission, tools):
         prompt = (f'Command: "{command}"\n'
@@ -284,7 +295,8 @@ class Planner:
                   '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}]))
+             {"role": "user", "content": prompt}],
+            max_tokens=1500))
 
     async def repair(self, command, mission, failed, tools):
         prompt = (f'Command: "{command}"\n'
@@ -293,4 +305,5 @@ class Planner:
                   'or {"give_up":true,"reason":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}]))
+             {"role": "user", "content": prompt}],
+            max_tokens=1500))
