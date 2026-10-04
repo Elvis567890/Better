@@ -1,4 +1,4 @@
-"""LLM planner with automatic provider + model discovery and repair."""
+"""LLM planner with deterministic classification for obvious commands."""
 import json
 import os
 import re
@@ -11,44 +11,33 @@ except Exception:
     Memory = None
 
 
-SYSTEM = """You are BOAT - an autonomous hustler agent.
-Reply with a single valid JSON object. No prose. No markdown fences.
-Inside the "reply" field, write a COMPLETE answer.
-Never end mid-sentence. Always finish the thought."""
+SYSTEM = """You are BOAT - an autonomous worker.
+Reply with a single valid JSON object. No prose outside the JSON."""
 
 
 PROVIDERS = [
-    {
-        "name": "groq",
-        "prefix": "gsk_",
-        "base": "https://api.groq.com/openai/v1",
-        "preferred": [
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "openai/gpt-oss-120b",
-            "meta-llama/llama-4-scout-17b-16e-instruct",
-        ],
-    },
-    {
-        "name": "cerebras",
-        "prefix": "csk-",
-        "base": "https://api.cerebras.ai/v1",
-        "preferred": ["llama-3.3-70b", "llama3.1-8b"],
-    },
-    {
-        "name": "openrouter",
-        "prefix": "sk-or-v1-",
-        "base": "https://openrouter.ai/api/v1",
-        "preferred": [],
-        "free_only": True,
-    },
-    {
-        "name": "aimlapi",
-        "prefix": "24b",
-        "base": "https://api.aimlapi.com/v1",
-        "preferred": ["inclusionai/ling-3.0-tiny"],
-    },
+    {"name": "groq", "prefix": "gsk_",
+     "base": "https://api.groq.com/openai/v1",
+     "preferred": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant",
+                   "openai/gpt-oss-120b"]},
+    {"name": "cerebras", "prefix": "csk-",
+     "base": "https://api.cerebras.ai/v1",
+     "preferred": ["llama-3.3-70b", "llama3.1-8b"]},
+    {"name": "openrouter", "prefix": "sk-or-v1-",
+     "base": "https://openrouter.ai/api/v1",
+     "preferred": [], "free_only": True},
 ]
+
+
+# Keywords that always mean "execute a task" — no LLM needed.
+EXECUTE_TRIGGERS = (
+    "build ", "make ", "create ", "generate ", "design ", "write ",
+    "code ", "program ", "find ", "search ", "look up ", "send ",
+    "post ", "register ", "sign up ", "check ", "do ", "just do",
+    "just build", "go ahead", "start ", "begin ", "run ",
+    "android", "flutter", "website", "app ", "script ",
+    "make me", "build me", "find me", "write me", "create me",
+)
 
 
 class Planner:
@@ -74,9 +63,7 @@ class Planner:
             self.chain.append({**p, "key": k, "models": None})
 
         if not self.chain:
-            raise RuntimeError(
-                "Unrecognized key prefix. Supported: "
-                "gsk_ / csk- / sk-or-v1- / 24b")
+            raise RuntimeError("Unrecognized key prefix.")
 
         self._memo = Memory() if Memory else None
         self._winner = None
@@ -84,7 +71,7 @@ class Planner:
             try:
                 self._winner = self._memo.kv_get("llm.winner")
             except Exception:
-                self._winner = None
+                pass
 
     @staticmethod
     def _detect(key):
@@ -101,8 +88,7 @@ class Planner:
                     headers={"Authorization": f"Bearer {provider['key']}"})
                 r.raise_for_status()
                 data = r.json()
-        except Exception as e:
-            print(f"  [discover] {provider['name']} failed: {e}")
+        except Exception:
             return []
 
         items = data.get("data") or data.get("models") or []
@@ -126,8 +112,6 @@ class Planner:
         for mid in ids:
             if mid not in ranked:
                 ranked.append(mid)
-        print(f"  [discover] {provider['name']}: {len(ranked)} models, "
-              f"top={ranked[0] if ranked else 'none'}")
         return ranked[:15]
 
     async def _chat(self, messages, max_tokens=3000, temperature=0.4):
@@ -153,7 +137,6 @@ class Planner:
                 text = await self._call(provider, model, messages,
                                         max_tokens, temperature)
                 if not text or not text.strip():
-                    last_error = f"{provider['name']}/{model}: empty"
                     continue
                 if self._memo:
                     try:
@@ -162,8 +145,6 @@ class Planner:
                                            "model": model})
                     except Exception:
                         pass
-                    self._winner = {"base": provider["base"], "model": model}
-                print(f"  [llm] {provider['name']}/{model} OK")
                 return text
             except Exception as e:
                 last_error = f"{provider['name']}/{model}: {str(e)[:120]}"
@@ -198,10 +179,9 @@ class Planner:
             r.raise_for_status()
             data = r.json()
             try:
-                content = data["choices"][0]["message"].get("content")
+                return data["choices"][0]["message"].get("content") or ""
             except Exception:
-                content = None
-            return content or ""
+                return ""
 
     @staticmethod
     def _json(s):
@@ -221,72 +201,90 @@ class Planner:
             except Exception:
                 return {}
 
-    # ---------- CLASSIFY ----------
+    # ---------- CLASSIFY (with deterministic pre-check) ----------
     async def classify(self, message, history):
+        low = " " + message.lower().strip() + " "
+
+        # 1. Deterministic: if it looks like a command, it's execute. No LLM.
+        for trig in EXECUTE_TRIGGERS:
+            if trig in low:
+                return {
+                    "mode": "execute",
+                    "reply": "On it. Working now, will report back.",
+                    "task": message,
+                    "confirm_action": "",
+                }
+
+        # 2. Deterministic: quick confirmations
+        if low.strip() in ("yes", "no", "ok", "okay", "y", "n"):
+            return {"mode": "chat", "reply": "Ok.",
+                    "task": "", "confirm_action": ""}
+
+        # 3. Otherwise, ask the LLM. Keep the prompt extremely simple.
+        #    Many small models echo schema examples, so we use plain English.
         hist = "\n".join(f"{h.get('role','?')}: {h.get('text','')}"
-                         for h in history[-10:])
+                         for h in history[-6:])
+
         prompt = (
-            f'Recent conversation:\n{hist}\n\n'
-            f'New message from owner: "{message}"\n\n'
-            'CLASSIFY.\n'
-            'Rules:\n'
-            '1. If the message contains any of:\n'
-            '   build, make, create, generate, design, write, code, program,\n'
-            '   find, search, look up, send, post, register, sign up, check,\n'
-            '   do, just do it, go ahead, start, begin, run\n'
-            '   -> mode = "execute".\n'
-            '2. Follow-up details of a previous EXECUTE (e.g. "Android, Flutter")\n'
-            '   -> also "execute", merged with the prior task.\n'
-            '3. Greetings / small talk / unrelated questions -> "chat".\n'
-            '4. Only "yes <name>" / "no <name>" for a payment -> "confirm".\n\n'
-            'NEVER ask follow-up questions. Pick defaults:\n'
-            '   mobile app -> Android + Flutter\n'
-            '   website -> static HTML/CSS/JS\n'
-            '   document -> markdown, English\n'
-            '   currency -> UGX\n\n'
-            'Reply ONLY with this JSON:\n'
-            '{\n'
-            '  "mode": "chat" | "execute" | "confirm",\n'
-            '  "reply": "chat -> full reply. execute -> short ack",\n'
-            '  "task": "execute -> FULL task description with defaults",\n'
-            '  "confirm_action": "yes <name>" | "no <name>" | ""\n'
-            '}')
-        return self._json(await self._chat(
+            f"Conversation:\n{hist}\n\n"
+            f'New message: "{message}"\n\n'
+            "Is this message asking you to DO something "
+            "(build, make, write, find, send)?\n"
+            "Reply with this JSON:\n"
+            '{"mode":"execute","task":"<the task>"}\n'
+            "Otherwise, for small talk, reply with:\n"
+            '{"mode":"chat","reply":"<your actual answer here>"}\n'
+            "Only output JSON. Do not output the example, output the real "
+            "answer. Fill in the <placeholders> with real text."
+        )
+        d = self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
-            max_tokens=3000, temperature=0.3))
+            max_tokens=1500, temperature=0.2))
 
-    # ---------- SCAN ----------
+        # Guard against placeholder echoes
+        reply = d.get("reply") or ""
+        task = d.get("task") or ""
+        if "<" in reply and ">" in reply:
+            reply = ""
+        if "<" in task and ">" in task:
+            task = ""
+
+        if d.get("mode") == "execute" and task:
+            return {"mode": "execute",
+                    "reply": "On it. Working now, will report back.",
+                    "task": task, "confirm_action": ""}
+
+        return {"mode": "chat",
+                "reply": reply or "(thinking...)",
+                "task": "", "confirm_action": ""}
+
+    # ---------- SCAN / DECIDE / NEXT / PIVOT / REPAIR ----------
     async def scan(self, command, context):
         prompt = (f'Command: "{command}"\n'
                   f'Memory: {json.dumps(context)[:1500]}\n\n'
                   'Reply ONLY JSON: {"resources":[],"today_opportunities":['
-                  '{"title":"..","url":"..","pays_today":true,"cost":0,'
-                  '"eta_hours":1}]}')
+                  '{"title":"..","url":"..","pays_today":true,"cost":0}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
             max_tokens=1500))
 
-    # ---------- DECIDE ----------
     async def decide(self, command, scan, tools):
         prompt = (
             f'Command: "{command}"\n'
             f'Scan: {json.dumps(scan)[:1500]}\n'
             f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
-            'Pick the right tools. IMPORTANT rules:\n'
-            '- Mobile app -> include BOTH steps in THIS batch, in order:\n'
-            '    1) code.write_flutter_app with spec=<full spec>, '
-            'app_slug=<short id>\n'
-            '    2) code.build_apk with the SAME app_slug and the SAME spec\n'
-            '  NEVER call code.build_apk alone - it needs the app files first.\n'
-            '- Website -> make.website with spec=<full spec>\n'
-            '- Doc/pitch/article -> make.document with spec=<full spec>\n'
-            '- Script -> make.script with spec=<full spec>, language=<lang>\n'
-            '- Unknown artifact -> make.any with spec=<full spec>\n'
-            '- Research only -> no tools, put answer in summary\n\n'
-            'Always pass the FULL spec into the tool so it has everything '
-            'it needs, including the app name, platform, and details.\n\n'
+            'Pick tools. Rules:\n'
+            '- Build a mobile app: code.write_flutter_app (with spec, '
+            'app_slug) THEN code.build_apk (with same app_slug and spec). '
+            'Two steps in this batch, in this order.\n'
+            '- Build a website: make.website with spec.\n'
+            '- Write a doc/article/pitch: make.document with spec.\n'
+            '- Write a script: make.script with spec and language.\n'
+            '- Find something online: browser.open with url.\n\n'
+            'IMPORTANT: pass the FULL spec into the tool args, not a '
+            'placeholder. The tool needs everything to do its job.\n\n'
             'Reply ONLY JSON: {"plan_name":"..",'
             '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
@@ -294,60 +292,42 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1500))
 
-    # ---------- NEXT ----------
     async def next(self, command, mission, last_results, tools):
         prompt = (f'Command: "{command}"\n'
-                  f'Mission: {json.dumps(mission)[:1500]}\n'
-                  f'Results: {json.dumps(last_results)[:1500]}\n\n'
-                  'Reply ONLY one of: {"done":true,"summary":".."} '
-                  'or {"steps":[...]} or {"pivot":true,"reason":".."} '
-                  'or {"ask":".."}')
+                  f'Mission: {json.dumps(mission)[:1200]}\n'
+                  f'Results: {json.dumps(last_results)[:1200]}\n\n'
+                  'Reply ONLY: {"done":true,"summary":".."} '
+                  'or {"steps":[...]} or {"pivot":true,"reason":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
-            max_tokens=1500))
+            max_tokens=1200))
 
-    # ---------- PIVOT ----------
     async def pivot(self, command, mission, tools):
         prompt = (f'Command: "{command}"\n'
-                  f'Failed approach: {json.dumps(mission)[:1500]}\n\n'
-                  'Try a completely different path. Reply ONLY JSON: '
-                  '{"plan_name":"..","steps":[{"tool":"..","args":{},"why":".."}]}')
+                  f'Failed: {json.dumps(mission)[:1200]}\n\n'
+                  'Try a different approach. Reply ONLY JSON: '
+                  '{"plan_name":"..","steps":[{"tool":"..","args":{}}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
-            max_tokens=1500))
+            max_tokens=1200))
 
-    # ---------- REPAIR ----------
     async def repair(self, command, mission, failed, tools):
+        err = json.dumps(failed)[:1200]
         prompt = (
             f'Command: "{command}"\n'
-            f'Failed steps (read the errors carefully): '
-            f'{json.dumps(failed)[:2000]}\n'
-            f'Available tools: {json.dumps([t["name"] for t in tools])}\n\n'
-            'SELF-HEAL RULES:\n'
-            '1. If a tool failed because a file or folder does NOT EXIST '
-            '   (e.g. "No such file or directory", "not found", '
-            '   "404", "apps/x does not exist"), then call the tool that '
-            '   CREATES that file FIRST in this repair plan:\n'
-            '     - Flutter app files -> code.write_flutter_app with the spec\n'
-            '     - Website files     -> make.website\n'
-            '     - Document          -> make.document\n'
-            '     - Script            -> make.script\n'
-            '     - Anything else     -> make.any\n'
-            '   Then re-run the original failing tool in the SAME plan.\n'
-            '2. If a tool failed because of a WRONG PARAMETER NAME, retry '
-            '   with the correct parameters the tool expects.\n'
-            '3. If a tool failed due to rate limiting or a timeout, retry '
-            '   the SAME tool with the SAME args after a short wait.\n'
-            '4. If the LLM response was empty or malformed, retry the '
-            '   same tool once.\n'
-            '5. Only give up if there is truly nothing left to try.\n\n'
-            'Reply ONLY JSON: {"plan_name":"..",'
-            '"steps":[{"tool":"..","args":{},"why":".."}],'
-            '"reason":"why this will work"}\n'
-            'OR {"give_up":true,"reason":".."}')
+            f'Failed: {err}\n'
+            f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
+            'Read the error text.\n'
+            '- If it says a file/folder is missing, call the tool that '
+            'creates it first, then retry the original.\n'
+            '- If a parameter name was wrong, retry with correct names.\n'
+            '- If it was a rate limit, retry the same call.\n'
+            '- If truly impossible, give up.\n\n'
+            'Reply ONLY JSON: {"steps":[{"tool":"..","args":{}}]} '
+            'or {"give_up":true,"reason":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
-            max_tokens=1500))
+            max_tokens=1200))
