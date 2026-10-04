@@ -1,13 +1,4 @@
-"""LLM planner with automatic provider + model discovery.
-
-Flow:
-  1. Read BOAT_LLM_KEY (whatever provider).
-  2. Detect provider from the key prefix.
-  3. Ask the provider GET /models for its live list.
-  4. Filter to chat-capable models.
-  5. Try each until one answers.
-  6. Remember the winner in boat.db.
-"""
+"""LLM planner with automatic provider + model discovery and repair."""
 import json
 import os
 import re
@@ -23,8 +14,7 @@ except Exception:
 SYSTEM = """You are BOAT - an autonomous hustler agent.
 Reply with a single valid JSON object. No prose. No markdown fences.
 Inside the "reply" field, write a COMPLETE answer.
-If you sense you're running out of room, wrap up quickly instead of stopping
-mid-sentence. Never end on "for" or "and" - always finish the thought."""
+Never end mid-sentence. Always finish the thought."""
 
 
 PROVIDERS = [
@@ -86,8 +76,7 @@ class Planner:
         if not self.chain:
             raise RuntimeError(
                 "Unrecognized key prefix. Supported: "
-                "gsk_ (Groq), csk- (Cerebras), sk-or-v1- (OpenRouter), "
-                "24b (AIMLAPI).")
+                "gsk_ / csk- / sk-or-v1- / 24b")
 
         self._memo = Memory() if Memory else None
         self._winner = None
@@ -105,16 +94,15 @@ class Planner:
         return None
 
     async def _discover(self, provider):
-        url = f"{provider['base']}/models"
         try:
             async with httpx.AsyncClient(timeout=30) as c:
                 r = await c.get(
-                    url,
+                    f"{provider['base']}/models",
                     headers={"Authorization": f"Bearer {provider['key']}"})
                 r.raise_for_status()
                 data = r.json()
         except Exception as e:
-            print(f"  [discover] {provider['name']} /models failed: {e}")
+            print(f"  [discover] {provider['name']} failed: {e}")
             return []
 
         items = data.get("data") or data.get("models") or []
@@ -133,12 +121,8 @@ class Planner:
 
         if not ids:
             return []
-
         pref = provider.get("preferred", [])
-        ranked = []
-        for want in pref:
-            if want in ids:
-                ranked.append(want)
+        ranked = [w for w in pref if w in ids]
         for mid in ids:
             if mid not in ranked:
                 ranked.append(mid)
@@ -148,13 +132,11 @@ class Planner:
 
     async def _chat(self, messages, max_tokens=3000, temperature=0.4):
         attempts = []
-
         if self._winner:
             for c in self.chain:
                 if c["base"] == self._winner.get("base"):
                     attempts.append((c, self._winner["model"]))
                     break
-
         for c in self.chain:
             if c["models"] is None:
                 c["models"] = await self._discover(c)
@@ -187,18 +169,15 @@ class Planner:
                 last_error = f"{provider['name']}/{model}: {str(e)[:120]}"
                 continue
 
-        # Second pass with a small delay, in case it was a rate limit
         await asyncio.sleep(4)
         for provider, model in attempts[:3]:
             try:
                 text = await self._call(provider, model, messages,
                                         max_tokens, temperature)
                 if text and text.strip():
-                    print(f"  [llm] retry OK: {provider['name']}/{model}")
                     return text
             except Exception:
                 continue
-
         raise RuntimeError(f"Every model failed. Last: {last_error}")
 
     async def _call(self, provider, model, messages, max_tokens, temperature):
@@ -256,22 +235,20 @@ class Planner:
             '   find, search, look up, send, post, register, sign up, check,\n'
             '   do, just do it, go ahead, start, begin, run\n'
             '   -> mode = "execute".\n'
-            '2. Follow-up details of a previous EXECUTE (e.g. "Android, Flutter"\n'
-            '   or "yes do it") -> also "execute", merged with the prior task.\n'
-            '3. Only greetings/questions/small-talk -> "chat".\n'
+            '2. Follow-up details of a previous EXECUTE (e.g. "Android, Flutter")\n'
+            '   -> also "execute", merged with the prior task.\n'
+            '3. Greetings / small talk / unrelated questions -> "chat".\n'
             '4. Only "yes <name>" / "no <name>" for a payment -> "confirm".\n\n'
             'NEVER ask follow-up questions. Pick defaults:\n'
-            '- Mobile app -> Android + Flutter\n'
-            '- Website -> static HTML/CSS/JS\n'
-            '- Document -> English, markdown\n'
-            '- Currency -> UGX\n'
-            '- Language -> English\n\n'
+            '   mobile app -> Android + Flutter\n'
+            '   website -> static HTML/CSS/JS\n'
+            '   document -> markdown, English\n'
+            '   currency -> UGX\n\n'
             'Reply ONLY with this JSON:\n'
             '{\n'
             '  "mode": "chat" | "execute" | "confirm",\n'
-            '  "reply": "chat -> full reply. execute -> short ack like '
-            '\\"On it, will report back.\\"",\n'
-            '  "task": "execute -> FULL description including all defaults",\n'
+            '  "reply": "chat -> full reply. execute -> short ack",\n'
+            '  "task": "execute -> FULL task description with defaults",\n'
             '  "confirm_action": "yes <name>" | "no <name>" | ""\n'
             '}')
         return self._json(await self._chat(
@@ -297,14 +274,19 @@ class Planner:
             f'Command: "{command}"\n'
             f'Scan: {json.dumps(scan)[:1500]}\n'
             f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
-            'Pick the right tools for the task:\n'
-            '- Build a mobile app -> code.write_flutter_app, then code.build_apk\n'
-            '- Build a website -> make.website\n'
-            '- Write an article/pitch/proposal/README -> make.document\n'
-            '- Write a script -> make.script\n'
-            '- Mixed/unknown artifact -> make.any\n'
-            '- Find something on the web -> browser.open\n'
-            '- Just research/think -> no tools, put the answer in summary\n\n'
+            'Pick the right tools. IMPORTANT rules:\n'
+            '- Mobile app -> include BOTH steps in THIS batch, in order:\n'
+            '    1) code.write_flutter_app with spec=<full spec>, '
+            'app_slug=<short id>\n'
+            '    2) code.build_apk with the SAME app_slug and the SAME spec\n'
+            '  NEVER call code.build_apk alone - it needs the app files first.\n'
+            '- Website -> make.website with spec=<full spec>\n'
+            '- Doc/pitch/article -> make.document with spec=<full spec>\n'
+            '- Script -> make.script with spec=<full spec>, language=<lang>\n'
+            '- Unknown artifact -> make.any with spec=<full spec>\n'
+            '- Research only -> no tools, put answer in summary\n\n'
+            'Always pass the FULL spec into the tool so it has everything '
+            'it needs, including the app name, platform, and details.\n\n'
             'Reply ONLY JSON: {"plan_name":"..",'
             '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
@@ -329,8 +311,8 @@ class Planner:
     async def pivot(self, command, mission, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Failed approach: {json.dumps(mission)[:1500]}\n\n'
-                  'Reply ONLY JSON: {"plan_name":"..",'
-                  '"steps":[{"tool":"..","args":{},"why":".."}]}')
+                  'Try a completely different path. Reply ONLY JSON: '
+                  '{"plan_name":"..","steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
@@ -338,10 +320,33 @@ class Planner:
 
     # ---------- REPAIR ----------
     async def repair(self, command, mission, failed, tools):
-        prompt = (f'Command: "{command}"\n'
-                  f'Failed: {json.dumps(failed)[:1200]}\n\n'
-                  'Reply ONLY JSON: {"plan_name":"..","steps":[...]} '
-                  'or {"give_up":true,"reason":".."}')
+        prompt = (
+            f'Command: "{command}"\n'
+            f'Failed steps (read the errors carefully): '
+            f'{json.dumps(failed)[:2000]}\n'
+            f'Available tools: {json.dumps([t["name"] for t in tools])}\n\n'
+            'SELF-HEAL RULES:\n'
+            '1. If a tool failed because a file or folder does NOT EXIST '
+            '   (e.g. "No such file or directory", "not found", '
+            '   "404", "apps/x does not exist"), then call the tool that '
+            '   CREATES that file FIRST in this repair plan:\n'
+            '     - Flutter app files -> code.write_flutter_app with the spec\n'
+            '     - Website files     -> make.website\n'
+            '     - Document          -> make.document\n'
+            '     - Script            -> make.script\n'
+            '     - Anything else     -> make.any\n'
+            '   Then re-run the original failing tool in the SAME plan.\n'
+            '2. If a tool failed because of a WRONG PARAMETER NAME, retry '
+            '   with the correct parameters the tool expects.\n'
+            '3. If a tool failed due to rate limiting or a timeout, retry '
+            '   the SAME tool with the SAME args after a short wait.\n'
+            '4. If the LLM response was empty or malformed, retry the '
+            '   same tool once.\n'
+            '5. Only give up if there is truly nothing left to try.\n\n'
+            'Reply ONLY JSON: {"plan_name":"..",'
+            '"steps":[{"tool":"..","args":{},"why":".."}],'
+            '"reason":"why this will work"}\n'
+            'OR {"give_up":true,"reason":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
