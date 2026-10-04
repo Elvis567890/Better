@@ -1,5 +1,13 @@
-"""LLM planner with auto-detected provider, auto-discovered models,
-and robust parsing for free models that don't support JSON mode."""
+"""LLM planner with automatic provider + model discovery.
+
+Flow:
+  1. Read BOAT_LLM_KEY (whatever provider).
+  2. Detect provider from the key prefix.
+  3. Ask the provider GET /models for its live list.
+  4. Filter to chat-capable models.
+  5. Try each until one answers.
+  6. Remember the winner in boat.db.
+"""
 import json
 import os
 import re
@@ -13,40 +21,40 @@ except Exception:
 
 
 SYSTEM = """You are BOAT - an autonomous hustler agent.
-IMPORTANT: Always reply with a single valid JSON object. No prose, no
-markdown, no code fences. Just raw JSON."""
+Reply with a single valid JSON object. No prose. No markdown fences."""
 
 
 PROVIDERS = [
     {
-        "name": "cerebras",
-        "prefix": "csk-",
-        "base": "https://api.cerebras.ai/v1",
-        "fallback_models": ["llama-3.3-70b", "llama3.1-8b"],
-    },
-    {
         "name": "groq",
         "prefix": "gsk_",
         "base": "https://api.groq.com/openai/v1",
-        "fallback_models": ["llama-3.3-70b-versatile",
-                            "llama-3.1-8b-instant"],
+        # names we prefer if they exist in the live list
+        "preferred": [
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "openai/gpt-oss-120b",
+            "meta-llama/llama-4-scout-17b-16e-instruct",
+        ],
+    },
+    {
+        "name": "cerebras",
+        "prefix": "csk-",
+        "base": "https://api.cerebras.ai/v1",
+        "preferred": ["llama-3.3-70b", "llama3.1-8b"],
     },
     {
         "name": "openrouter",
         "prefix": "sk-or-v1-",
         "base": "https://openrouter.ai/api/v1",
-        "fallback_models": [
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemma-2-9b-it:free",
-            "mistralai/mistral-7b-instruct:free",
-        ],
-        "discover": True,
+        "preferred": [],  # we filter by :free
+        "free_only": True,
     },
     {
         "name": "aimlapi",
         "prefix": "24b",
         "base": "https://api.aimlapi.com/v1",
-        "fallback_models": ["inclusionai/ling-3.0-tiny"],
+        "preferred": ["inclusionai/ling-3.0-tiny"],
     },
 ]
 
@@ -54,7 +62,7 @@ PROVIDERS = [
 class Planner:
     def __init__(self, base=None, key=None, model=None):
         keys = []
-        for env in ("BOAT_LLM_KEY", "CEREBRAS_KEY", "GROQ_KEY",
+        for env in ("BOAT_LLM_KEY", "GROQ_KEY", "CEREBRAS_KEY",
                     "OPENROUTER_KEY", "AIMLAPI_KEY"):
             k = os.environ.get(env)
             if k:
@@ -75,8 +83,9 @@ class Planner:
 
         if not self.chain:
             raise RuntimeError(
-                "Key prefix not recognized. Supported: "
-                "csk- (Cerebras), gsk_ (Groq), sk-or-v1- (OpenRouter).")
+                "Unrecognized key prefix. Supported: "
+                "gsk_ (Groq), csk- (Cerebras), sk-or-v1- (OpenRouter), "
+                "24b (AIMLAPI).")
 
         self._memo = Memory() if Memory else None
         self._winner = None
@@ -93,30 +102,50 @@ class Planner:
                 return dict(p)
         return None
 
-    async def _discover_models(self, provider):
-        if provider.get("discover"):
-            try:
-                async with httpx.AsyncClient(timeout=30) as c:
-                    r = await c.get(
-                        f"{provider['base']}/models",
-                        headers={"Authorization":
-                                 f"Bearer {provider['key']}"})
-                    r.raise_for_status()
-                    data = r.json().get("data", [])
-                    free = [m["id"] for m in data
-                            if m.get("id", "").endswith(":free")]
-                    if free:
-                        # prefer bigger/known-good models first
-                        ranked = sorted(
-                            free,
-                            key=lambda x: (
-                                "70b" not in x.lower(),
-                                "8b" in x.lower(),
-                            ))
-                        return ranked[:8]
-            except Exception:
-                pass
-        return list(provider.get("fallback_models", []))
+    async def _discover(self, provider):
+        """Fetch the live model list from the provider."""
+        url = f"{provider['base']}/models"
+        try:
+            async with httpx.AsyncClient(timeout=30) as c:
+                r = await c.get(
+                    url,
+                    headers={"Authorization": f"Bearer {provider['key']}"})
+                r.raise_for_status()
+                data = r.json()
+        except Exception as e:
+            print(f"  [discover] {provider['name']} /models failed: {e}")
+            return []
+
+        # OpenAI-style response
+        items = data.get("data") or data.get("models") or []
+        ids = []
+        for m in items:
+            mid = m.get("id") or m.get("name") or ""
+            if not mid:
+                continue
+            if provider.get("free_only") and not mid.endswith(":free"):
+                continue
+            # skip obviously non-chat models
+            low = mid.lower()
+            if any(x in low for x in ("whisper", "tts", "embed", "vision-only")):
+                continue
+            ids.append(mid)
+
+        if not ids:
+            return []
+
+        # rank: preferred first (in order), then everything else
+        pref = provider.get("preferred", [])
+        ranked = []
+        for want in pref:
+            if want in ids:
+                ranked.append(want)
+        for mid in ids:
+            if mid not in ranked:
+                ranked.append(mid)
+        print(f"  [discover] {provider['name']}: {len(ranked)} models, "
+              f"top={ranked[0] if ranked else 'none'}")
+        return ranked[:15]
 
     async def _chat(self, messages, max_tokens=1200, temperature=0.4):
         attempts = []
@@ -129,10 +158,13 @@ class Planner:
 
         for c in self.chain:
             if c["models"] is None:
-                c["models"] = await self._discover_models(c)
+                c["models"] = await self._discover(c)
             for m in c["models"]:
                 if (c, m) not in attempts:
                     attempts.append((c, m))
+
+        if not attempts:
+            raise RuntimeError("No models found on any provider.")
 
         last_error = None
         for provider, model in attempts:
@@ -140,7 +172,7 @@ class Planner:
                 text = await self._call(provider, model, messages,
                                         max_tokens, temperature)
                 if not text or not text.strip():
-                    last_error = f"{provider['name']}/{model}: empty response"
+                    last_error = f"{provider['name']}/{model}: empty"
                     continue
                 if self._memo:
                     try:
@@ -150,12 +182,13 @@ class Planner:
                     except Exception:
                         pass
                     self._winner = {"base": provider["base"], "model": model}
+                print(f"  [llm] {provider['name']}/{model} OK")
                 return text
             except Exception as e:
                 last_error = f"{provider['name']}/{model}: {str(e)[:120]}"
                 continue
 
-        raise RuntimeError(f"Every provider failed. Last: {last_error}")
+        raise RuntimeError(f"Every model failed. Last: {last_error}")
 
     async def _call(self, provider, model, messages, max_tokens, temperature):
         async with httpx.AsyncClient(timeout=120) as c:
@@ -167,8 +200,6 @@ class Planner:
                     "messages": messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
-                    # NOT sending response_format — free models often
-                    # return null content when they don't support it.
                 },
             )
             if r.status_code in (429, 503):
@@ -180,19 +211,12 @@ class Planner:
                 content = data["choices"][0]["message"].get("content")
             except Exception:
                 content = None
-            if not content:
-                # some models put it in a different field
-                try:
-                    content = data["choices"][0]["message"].get("reasoning")
-                except Exception:
-                    pass
             return content or ""
 
     @staticmethod
     def _json(s):
         if not s:
             return {}
-        # strip code fences if present
         s = s.strip()
         s = re.sub(r"^```(?:json)?\s*", "", s)
         s = re.sub(r"\s*```$", "", s)
@@ -211,14 +235,12 @@ class Planner:
     async def classify(self, message, history):
         hist = "\n".join(f"{h.get('role','?')}: {h.get('text','')}"
                          for h in history[-10:])
-        prompt = (f'Conversation:\n{hist}\n\nNew message from owner: '
-                  f'"{message}"\n\n'
-                  'Decide if this is chat, execute, or confirm. '
-                  'Return ONLY this JSON:\n'
+        prompt = (f'Conversation:\n{hist}\n\nNew message: "{message}"\n\n'
+                  'Reply with ONLY this JSON:\n'
                   '{"mode":"chat"|"execute"|"confirm",'
-                  '"reply":"short natural reply to the owner",'
-                  '"task":"clean task if mode=execute",'
-                  '"confirm_action":"yes <name>" or "no <name>" or ""}')
+                  '"reply":"short natural reply",'
+                  '"task":"clean task if execute",'
+                  '"confirm_action":""}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
@@ -227,9 +249,9 @@ class Planner:
     async def scan(self, command, context):
         prompt = (f'Command: "{command}"\n'
                   f'Memory: {json.dumps(context)[:1500]}\n\n'
-                  'Return ONLY this JSON: {"resources":[],'
-                  '"today_opportunities":[{"title":"..","url":"..",'
-                  '"pays_today":true,"cost":0,"eta_hours":1,"notes":".."}]}')
+                  'Reply ONLY JSON: {"resources":[],"today_opportunities":['
+                  '{"title":"..","url":"..","pays_today":true,"cost":0,'
+                  '"eta_hours":1}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}]))
@@ -238,7 +260,7 @@ class Planner:
         prompt = (f'Command: "{command}"\n'
                   f'Scan: {json.dumps(scan)[:1500]}\n'
                   f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
-                  'Return ONLY this JSON: {"plan_name":"..",'
+                  'Reply ONLY JSON: {"plan_name":"..",'
                   '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
@@ -248,17 +270,17 @@ class Planner:
         prompt = (f'Command: "{command}"\n'
                   f'Mission: {json.dumps(mission)[:1500]}\n'
                   f'Results: {json.dumps(last_results)[:1500]}\n\n'
-                  'Return ONLY ONE of these JSON shapes: '
-                  '{"done":true,"summary":".."} or {"steps":[...]} '
-                  'or {"pivot":true,"reason":".."} or {"ask":".."}')
+                  'Reply ONLY one of: {"done":true,"summary":".."} '
+                  'or {"steps":[...]} or {"pivot":true,"reason":".."} '
+                  'or {"ask":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}]))
 
     async def pivot(self, command, mission, tools):
         prompt = (f'Command: "{command}"\n'
-                  f'Failed approach: {json.dumps(mission)[:1500]}\n\n'
-                  'Return ONLY this JSON: {"plan_name":"..",'
+                  f'Failed: {json.dumps(mission)[:1500]}\n\n'
+                  'Reply ONLY JSON: {"plan_name":"..",'
                   '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
@@ -267,7 +289,7 @@ class Planner:
     async def repair(self, command, mission, failed, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Failed: {json.dumps(failed)[:1200]}\n\n'
-                  'Return ONLY this JSON: {"plan_name":"..","steps":[...]} '
+                  'Reply ONLY JSON: {"plan_name":"..","steps":[...]} '
                   'or {"give_up":true,"reason":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
