@@ -44,7 +44,7 @@ async def call_tool(name, args):
 def load_all():
     """Import every tool module so its decorators register themselves."""
 
-    # Core tools — always required. If any of these fails to import,
+    # Core tools - always required. If any of these fails to import,
     # something is fundamentally wrong with the repo.
     from . import (
         shell_tool,
@@ -57,10 +57,11 @@ def load_all():
         telegram_tool,
     )
 
-    # Optional tools — loaded only if the file exists. If one is missing,
+    # Optional tools - loaded only if the file exists. If one is missing,
     # the brain still runs with whatever it has.
     for name in (
         "code_writer",
+        "maker",
         "account_creator",
         "ask_tool",
         "phone_agent",
@@ -69,5 +70,4 @@ def load_all():
         try:
             __import__(f"boat.tools.{name}")
         except Exception:
-            # Missing tool is fine — just skip it silently.
             pass
