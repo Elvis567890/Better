@@ -3,7 +3,7 @@ name: BOAT build APK
 on:
   workflow_dispatch:
     inputs:
-      app_dir:      { required: true,  default: "app" }
+      app_dir:      { required: true,  default: "apps/tipcalc" }
       app_name:     { required: false, default: "BoatApp" }
       package_name: { required: false, default: "com.boat.app" }
       chat_id:      { required: true }
@@ -21,13 +21,10 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "17" }
 
-      - name: Flutter setup
-        if: hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != ''
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with: { channel: stable }
 
-      - name: flutter build
-        if: hashFiles(format('{0}/pubspec.yaml', inputs.app_dir)) != ''
+      - name: Flutter build
         working-directory: ${{ inputs.app_dir }}
         run: |
           flutter pub get
@@ -35,21 +32,19 @@ jobs:
             --dart-define=APP_NAME="${{ inputs.app_name }}" \
             --dart-define=PACKAGE_NAME="${{ inputs.package_name }}"
 
-      - name: Gradle build
-        if: hashFiles(format('{0}/build.gradle', inputs.app_dir)) != ''
-        working-directory: ${{ inputs.app_dir }}
-        run: ./gradlew assembleRelease
-
       - name: Locate APK
         id: apk
-        run: echo "path=$(find . -name '*.apk' -type f | head -n1)" >> "$GITHUB_OUTPUT"
+        run: |
+          APK=$(find . -name "*.apk" -type f | head -n1)
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "APK=$APK"
 
-      - name: Send to Telegram
+      - name: Send APK to Telegram
         env:
           TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT:  ${{ inputs.chat_id }}
         run: |
           curl -s -F chat_id="$CHAT" \
-               -F caption="${{ inputs.app_name }} - built by BOAT" \
+               -F caption="📦 ${{ inputs.app_name }} — built by BOAT" \
                -F document=@"${{ steps.apk.outputs.path }}" \
                "https://api.telegram.org/bot${TOKEN}/sendDocument"
