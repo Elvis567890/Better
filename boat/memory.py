@@ -1,4 +1,4 @@
-"""BOAT memory. Missions, payments, opportunities, lessons, chat history."""
+"""BOAT memory: missions, payments, opportunities, lessons, chat, vault."""
 import json
 import os
 import sqlite3
@@ -35,8 +35,18 @@ CREATE TABLE IF NOT EXISTS pending_payments(
   raw TEXT, mission_id TEXT, status TEXT, created REAL);
 
 CREATE TABLE IF NOT EXISTS vault(
-  service TEXT PRIMARY KEY, username TEXT, password TEXT, phone TEXT,
-  notes TEXT, created REAL, last_used REAL);
+  service TEXT PRIMARY KEY, kind TEXT, username TEXT, password TEXT,
+  extra TEXT, notes TEXT, created REAL, last_used REAL);
+
+CREATE TABLE IF NOT EXISTS projects(
+  id TEXT PRIMARY KEY, title TEXT, goal TEXT, status TEXT,
+  stage TEXT, plan TEXT, done TEXT, blocked TEXT, notes TEXT,
+  created REAL, updated REAL);
+
+CREATE TABLE IF NOT EXISTS leads(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT, contact TEXT, channel TEXT, region TEXT, pitch TEXT,
+  status TEXT, created REAL, updated REAL);
 
 CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);
 """
@@ -49,14 +59,13 @@ class Memory:
         self.db.executescript(SCHEMA)
         self.db.commit()
 
-    # ---------- missions ----------
+    # missions
     def create_mission(self, mid, command, source):
         now = time.time()
         self.db.execute(
-            "INSERT INTO missions(id,command,source,status,created,updated) "
-            "VALUES(?,?,?,?,?,?)",
-            (mid, command, source, "thinking", now, now),
-        )
+            "INSERT INTO missions(id,command,source,status,created,updated)"
+            " VALUES(?,?,?,?,?,?)",
+            (mid, command, source, "thinking", now, now))
         self.db.commit()
 
     def update_mission(self, mid, **kw):
@@ -65,82 +74,72 @@ class Memory:
         cols = ", ".join(f"{k}=?" for k in kw)
         self.db.execute(
             f"UPDATE missions SET {cols}, updated=? WHERE id=?",
-            (*kw.values(), time.time(), mid),
-        )
+            (*kw.values(), time.time(), mid))
         self.db.commit()
 
-    # ---------- payments ----------
+    # payments
     def record_payment(self, mid, source, amount, currency="USD",
                        ref="", verified=0):
         self.db.execute(
             "INSERT INTO payments(mission_id,source,amount,currency,ref,"
             "verified,ts) VALUES(?,?,?,?,?,?,?)",
-            (mid, source, amount, currency, ref, verified, time.time()),
-        )
+            (mid, source, amount, currency, ref, verified, time.time()))
         self.db.commit()
 
     def money_today(self):
         start = time.time() - 86400
         cur = self.db.execute(
             "SELECT COALESCE(SUM(amount),0) FROM payments "
-            "WHERE verified=1 AND ts>=?", (start,),
-        )
+            "WHERE verified=1 AND ts>=?", (start,))
         return float(cur.fetchone()[0] or 0)
 
-    # ---------- lessons ----------
+    # lessons
     def add_lesson(self, mid, kind, text):
         self.db.execute(
             "INSERT INTO lessons(mission_id,kind,text,ts) VALUES(?,?,?,?)",
-            (mid, kind, text, time.time()),
-        )
+            (mid, kind, text, time.time()))
         self.db.commit()
 
-    # ---------- opportunities ----------
+    # opportunities
     def add_opportunity(self, title, url, pays_today, cost, eta_hours,
                         notes=""):
         self.db.execute(
             "INSERT INTO opportunities(title,url,pays_today,cost,eta_hours,"
             "notes,ts) VALUES(?,?,?,?,?,?,?)",
-            (title, url, int(pays_today), cost, eta_hours, notes, time.time()),
-        )
+            (title, url, int(pays_today), cost, eta_hours, notes, time.time()))
         self.db.commit()
 
-    # ---------- chat history ----------
+    # chat
     def add_chat(self, role, text):
         self.db.execute(
             "INSERT INTO chat_history(role,text,ts) VALUES(?,?,?)",
-            (role, text, time.time()),
-        )
+            (role, text, time.time()))
         self.db.commit()
 
     def recent_chat(self, n=12):
         rows = self.db.execute(
-            "SELECT role, text, ts FROM chat_history "
-            "ORDER BY ts DESC LIMIT ?", (n,),
-        ).fetchall()
+            "SELECT role,text,ts FROM chat_history "
+            "ORDER BY ts DESC LIMIT ?", (n,)).fetchall()
         rows.reverse()
         return [{"role": r[0], "text": r[1], "ts": r[2]} for r in rows]
 
-    # ---------- context ----------
+    # context
     def recent_context(self, n=5):
         missions = self.db.execute(
-            "SELECT id, command, status, money_today FROM missions "
-            "ORDER BY created DESC LIMIT ?", (n,),
-        ).fetchall()
+            "SELECT id,command,status,money_today FROM missions "
+            "ORDER BY created DESC LIMIT ?", (n,)).fetchall()
         lessons = self.db.execute(
-            "SELECT kind, text FROM lessons ORDER BY ts DESC LIMIT 10"
+            "SELECT kind,text FROM lessons ORDER BY ts DESC LIMIT 10"
         ).fetchall()
         return {
             "recent_missions": [
                 {"id": m[0], "command": m[1], "status": m[2],
-                 "money_today": m[3]}
-                for m in missions
-            ],
+                 "money_today": m[3]} for m in missions],
             "lessons": [{"kind": l[0], "text": l[1]} for l in lessons],
             "money_today_total": self.money_today(),
         }
 
-    # ---------- kv ----------
+    # kv
     def kv_get(self, k, default=None):
         row = self.db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
         return json.loads(row[0]) if row else default
