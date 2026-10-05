@@ -1,4 +1,4 @@
-"""BOAT brain: chat-first loop with repair, self-check, evolve."""
+"""BOAT brain: chat-first loop with universal self-healing."""
 import asyncio
 import json
 import logging
@@ -66,7 +66,7 @@ class Boat:
         mode = decision.get("mode", "chat")
         reply = decision.get("reply", "")
         if not reply:
-            reply = (f"(LLM returned empty - mode={mode})\nTry again.")
+            reply = f"(LLM returned empty - mode={mode})\nTry again."
 
         await self._say(chat, reply)
         self.memory.add_chat("boat", reply)
@@ -161,6 +161,36 @@ class Boat:
 
             failed = [r for r in norm if not r.get("ok", True)]
             if failed and it < MAX_ITER - 1:
+                # Universal self-healer
+                healed_plan = []
+                for f in failed:
+                    try:
+                        heal = await call_tool("self.auto_heal", {
+                            "failed_step": {"tool": f.get("tool"),
+                                            "args": f.get("args", {})},
+                            "error": str(f.get("error", "")),
+                            "mission_context": {"command": command},
+                        })
+                        log.info("auto_heal -> %s", heal)
+                        if heal.get("healed"):
+                            for s in heal.get("next_steps", []):
+                                healed_plan.append(s)
+                    except Exception as e:
+                        log.warning("auto_heal failed: %s", e)
+
+                if healed_plan:
+                    self.memory.add_lesson(
+                        mid, "auto_heal",
+                        f"healed {len(failed)} failure(s), "
+                        f"retrying with {len(healed_plan)} step(s)")
+                    await self._say(
+                        reply_to,
+                        f"Attempt {it+1} failed. Self-healing and retrying.")
+                    plan = [_norm_step(s) for s in healed_plan if s]
+                    plan = [s for s in plan if s.get("tool")][:BATCH]
+                    continue
+
+                # Fall back to LLM-based repair
                 try:
                     rep = await self.planner.repair(
                         command, mission, failed, tool_specs())
@@ -172,16 +202,9 @@ class Boat:
                 rep_plan = [s for s in rep_plan if s.get("tool")][:BATCH]
 
                 if rep_plan:
-                    self.memory.add_lesson(
-                        mid, "repair",
-                        f"step failed -> {rep.get('plan_name','')}")
-                    await self._say(reply_to,
-                                    f"Attempt {it+1} failed. Retrying.")
                     plan = rep_plan
                     continue
                 if rep.get("give_up"):
-                    self.memory.add_lesson(
-                        mid, "give_up", rep.get("reason", "unknown"))
                     return self._finish(
                         mid, "blocked",
                         {"reason": rep.get("reason"),
@@ -217,13 +240,6 @@ class Boat:
                 continue
 
             if nxt.get("done"):
-                # final verification
-                try:
-                    await call_tool("self.verify", {
-                        "artifact_kind": "app",
-                        "identifier": _guess_slug(command)})
-                except Exception:
-                    pass
                 return self._finish(
                     mid, "done",
                     {"summary": nxt.get("summary", ""),
@@ -248,11 +264,12 @@ class Boat:
             res = await call_tool(name, args)
             return {"tool": name, "ok": True,
                     "ms": int((time.time() - t0) * 1000),
-                    "result": res}
+                    "result": res, "args": args}
         except Exception as e:
             log.exception("tool %s failed", name)
             return {"tool": name, "ok": False, "error": str(e),
-                    "ms": int((time.time() - t0) * 1000)}
+                    "ms": int((time.time() - t0) * 1000),
+                    "args": args}
 
     async def _say(self, chat_id, text):
         chat = _resolve_chat(chat_id)
@@ -289,15 +306,3 @@ def _trim(r, n=800):
         return json.loads(s if len(s) <= n else s[:n] + '..."')
     except Exception:
         return str(r)[:n]
-
-
-def _guess_slug(cmd):
-    import re
-    m = re.search(r"(?:called|named)\s+([a-z0-9_\-]+)", cmd.lower())
-    if m:
-        return re.sub(r"[^a-z0-9]+", "_", m.group(1))[:30]
-    m = re.search(r"(?:build|make)\s+(?:me\s+)?(?:a\s+|an\s+)?"
-                  r"([a-z][a-z0-9_\-]{2,})", cmd.lower())
-    if m:
-        return re.sub(r"[^a-z0-9]+", "_", m.group(1))[:30]
-    return "task"
