@@ -1,4 +1,10 @@
-"""LLM planner with deterministic classification for obvious commands."""
+"""LLM planner with deterministic routing for common tasks.
+
+- classify: keyword-first. Obvious commands skip the LLM entirely.
+- decide:   keyword-first. App/website/doc/script tasks get hardcoded
+            step lists so the LLM can't return "no plan".
+- Every other phase has an LLM fallback with discovery + retries.
+"""
 import json
 import os
 import re
@@ -16,20 +22,40 @@ Reply with a single valid JSON object. No prose outside the JSON."""
 
 
 PROVIDERS = [
-    {"name": "groq", "prefix": "gsk_",
-     "base": "https://api.groq.com/openai/v1",
-     "preferred": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant",
-                   "openai/gpt-oss-120b"]},
-    {"name": "cerebras", "prefix": "csk-",
-     "base": "https://api.cerebras.ai/v1",
-     "preferred": ["llama-3.3-70b", "llama3.1-8b"]},
-    {"name": "openrouter", "prefix": "sk-or-v1-",
-     "base": "https://openrouter.ai/api/v1",
-     "preferred": [], "free_only": True},
+    {
+        "name": "groq",
+        "prefix": "gsk_",
+        "base": "https://api.groq.com/openai/v1",
+        "preferred": [
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "openai/gpt-oss-120b",
+            "meta-llama/llama-4-scout-17b-16e-instruct",
+        ],
+    },
+    {
+        "name": "cerebras",
+        "prefix": "csk-",
+        "base": "https://api.cerebras.ai/v1",
+        "preferred": ["llama-3.3-70b", "llama3.1-8b"],
+    },
+    {
+        "name": "openrouter",
+        "prefix": "sk-or-v1-",
+        "base": "https://openrouter.ai/api/v1",
+        "preferred": [],
+        "free_only": True,
+    },
+    {
+        "name": "aimlapi",
+        "prefix": "24b",
+        "base": "https://api.aimlapi.com/v1",
+        "preferred": ["inclusionai/ling-3.0-tiny"],
+    },
 ]
 
 
-# Keywords that always mean "execute a task" — no LLM needed.
+# Keywords that always mean "execute a task" - no LLM needed to classify.
 EXECUTE_TRIGGERS = (
     "build ", "make ", "create ", "generate ", "design ", "write ",
     "code ", "program ", "find ", "search ", "look up ", "send ",
@@ -73,6 +99,9 @@ class Planner:
             except Exception:
                 pass
 
+    # ----------------------------------------------------------------
+    # Provider setup
+    # ----------------------------------------------------------------
     @staticmethod
     def _detect(key):
         for p in PROVIDERS:
@@ -88,7 +117,8 @@ class Planner:
                     headers={"Authorization": f"Bearer {provider['key']}"})
                 r.raise_for_status()
                 data = r.json()
-        except Exception:
+        except Exception as e:
+            print(f"  [discover] {provider['name']} failed: {e}")
             return []
 
         items = data.get("data") or data.get("models") or []
@@ -112,8 +142,13 @@ class Planner:
         for mid in ids:
             if mid not in ranked:
                 ranked.append(mid)
+        print(f"  [discover] {provider['name']}: {len(ranked)} models, "
+              f"top={ranked[0] if ranked else 'none'}")
         return ranked[:15]
 
+    # ----------------------------------------------------------------
+    # LLM call with fallback
+    # ----------------------------------------------------------------
     async def _chat(self, messages, max_tokens=3000, temperature=0.4):
         attempts = []
         if self._winner:
@@ -145,6 +180,7 @@ class Planner:
                                            "model": model})
                     except Exception:
                         pass
+                print(f"  [llm] {provider['name']}/{model} OK")
                 return text
             except Exception as e:
                 last_error = f"{provider['name']}/{model}: {str(e)[:120]}"
@@ -156,6 +192,7 @@ class Planner:
                 text = await self._call(provider, model, messages,
                                         max_tokens, temperature)
                 if text and text.strip():
+                    print(f"  [llm] retry OK: {provider['name']}/{model}")
                     return text
             except Exception:
                 continue
@@ -201,11 +238,13 @@ class Planner:
             except Exception:
                 return {}
 
-    # ---------- CLASSIFY (with deterministic pre-check) ----------
+    # ================================================================
+    # CLASSIFY
+    # ================================================================
     async def classify(self, message, history):
         low = " " + message.lower().strip() + " "
 
-        # 1. Deterministic: if it looks like a command, it's execute. No LLM.
+        # 1. Deterministic: obvious commands never hit the LLM.
         for trig in EXECUTE_TRIGGERS:
             if trig in low:
                 return {
@@ -215,34 +254,29 @@ class Planner:
                     "confirm_action": "",
                 }
 
-        # 2. Deterministic: quick confirmations
+        # 2. Quick confirmations
         if low.strip() in ("yes", "no", "ok", "okay", "y", "n"):
             return {"mode": "chat", "reply": "Ok.",
                     "task": "", "confirm_action": ""}
 
-        # 3. Otherwise, ask the LLM. Keep the prompt extremely simple.
-        #    Many small models echo schema examples, so we use plain English.
+        # 3. Fallback: ask the LLM. Very explicit prompt for small models.
         hist = "\n".join(f"{h.get('role','?')}: {h.get('text','')}"
                          for h in history[-6:])
-
         prompt = (
             f"Conversation:\n{hist}\n\n"
             f'New message: "{message}"\n\n'
             "Is this message asking you to DO something "
             "(build, make, write, find, send)?\n"
-            "Reply with this JSON:\n"
-            '{"mode":"execute","task":"<the task>"}\n'
-            "Otherwise, for small talk, reply with:\n"
-            '{"mode":"chat","reply":"<your actual answer here>"}\n'
-            "Only output JSON. Do not output the example, output the real "
-            "answer. Fill in the <placeholders> with real text."
+            'Reply with: {"mode":"execute","task":"<the task>"}\n'
+            "Or, for small talk, reply with: "
+            '{"mode":"chat","reply":"<your actual answer>"}\n'
+            "Only output JSON. Fill in real text, not the <brackets>."
         )
         d = self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
             max_tokens=1500, temperature=0.2))
 
-        # Guard against placeholder echoes
         reply = d.get("reply") or ""
         task = d.get("task") or ""
         if "<" in reply and ">" in reply:
@@ -259,50 +293,132 @@ class Planner:
                 "reply": reply or "(thinking...)",
                 "task": "", "confirm_action": ""}
 
-    # ---------- SCAN / DECIDE / NEXT / PIVOT / REPAIR ----------
-    async def scan(self, command, context):
-        prompt = (f'Command: "{command}"\n'
-                  f'Memory: {json.dumps(context)[:1500]}\n\n'
-                  'Reply ONLY JSON: {"resources":[],"today_opportunities":['
-                  '{"title":"..","url":"..","pays_today":true,"cost":0}]}')
-        return self._json(await self._chat(
-            [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-            max_tokens=1500))
-
+    # ================================================================
+    # DECIDE - keyword-first deterministic routing
+    # ================================================================
     async def decide(self, command, scan, tools):
+        low = command.lower()
+
+        # ---- Mobile app ----
+        if any(k in low for k in ("app", "android", "flutter", "apk",
+                                  "calculator", "mobile")):
+            slug = self._slug_from_command(command)
+            return {
+                "plan_name": "build_mobile_app",
+                "steps": [
+                    {"tool": "code.write_flutter_app",
+                     "args": {"spec": command, "app_slug": slug,
+                              "app_name": slug.replace("_", " ").title()},
+                     "why": "write the Flutter source first"},
+                    {"tool": "code.build_apk",
+                     "args": {"app_slug": slug, "spec": command},
+                     "why": "compile and ship the APK"},
+                ],
+            }
+
+        # ---- Website ----
+        if any(k in low for k in ("website", "site", "landing", "webpage",
+                                  "web page", "html")):
+            slug = self._slug_from_command(command)
+            return {
+                "plan_name": "build_website",
+                "steps": [
+                    {"tool": "make.website",
+                     "args": {"spec": command, "slug": slug},
+                     "why": "build a static site"},
+                ],
+            }
+
+        # ---- Document ----
+        if any(k in low for k in ("pitch", "article", "doc", "document",
+                                  "proposal", "essay", "letter",
+                                  "readme", "guide", "post ")):
+            slug = self._slug_from_command(command)
+            return {
+                "plan_name": "write_document",
+                "steps": [
+                    {"tool": "make.document",
+                     "args": {"spec": command, "slug": slug},
+                     "why": "write the document"},
+                ],
+            }
+
+        # ---- Script ----
+        if any(k in low for k in ("script", "python script",
+                                  "bash script", "shell script",
+                                  "javascript", "node script")):
+            lang = "python"
+            if "bash" in low or "shell" in low:
+                lang = "bash"
+            elif "javascript" in low or "node" in low:
+                lang = "javascript"
+            slug = self._slug_from_command(command)
+            return {
+                "plan_name": "write_script",
+                "steps": [
+                    {"tool": "make.script",
+                     "args": {"spec": command, "language": lang,
+                              "slug": slug},
+                     "why": "write the script"},
+                ],
+            }
+
+        # ---- Fallback: ask the LLM ----
         prompt = (
             f'Command: "{command}"\n'
-            f'Scan: {json.dumps(scan)[:1500]}\n'
             f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
-            'Pick tools. Rules:\n'
-            '- Build a mobile app: code.write_flutter_app (with spec, '
-            'app_slug) THEN code.build_apk (with same app_slug and spec). '
-            'Two steps in this batch, in this order.\n'
-            '- Build a website: make.website with spec.\n'
-            '- Write a doc/article/pitch: make.document with spec.\n'
-            '- Write a script: make.script with spec and language.\n'
-            '- Find something online: browser.open with url.\n\n'
-            'IMPORTANT: pass the FULL spec into the tool args, not a '
-            'placeholder. The tool needs everything to do its job.\n\n'
             'Reply ONLY JSON: {"plan_name":"..",'
             '"steps":[{"tool":"..","args":{},"why":".."}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
+            max_tokens=1200))
+
+    @staticmethod
+    def _slug_from_command(cmd):
+        low = cmd.lower()
+        m = re.search(r"(?:called|named)\s+([a-z0-9_\-]+)", low)
+        if m:
+            return re.sub(r"[^a-z0-9]+", "_", m.group(1))[:30]
+        m = re.search(
+            r"(?:build|make|create|write)\s+(?:me\s+)?(?:a\s+|an\s+)?"
+            r"([a-z][a-z0-9_\-]{2,})", low)
+        if m:
+            return re.sub(r"[^a-z0-9]+", "_", m.group(1))[:30]
+        return "task"
+
+    # ================================================================
+    # SCAN
+    # ================================================================
+    async def scan(self, command, context):
+        prompt = (f'Command: "{command}"\n'
+                  f'Memory: {json.dumps(context)[:1500]}\n\n'
+                  'Reply ONLY JSON: {"resources":[],"today_opportunities":['
+                  '{"title":"..","url":"..","pays_today":true,"cost":0,'
+                  '"eta_hours":1}]}')
+        return self._json(await self._chat(
+            [{"role": "system", "content": SYSTEM},
+             {"role": "user", "content": prompt}],
             max_tokens=1500))
 
+    # ================================================================
+    # NEXT
+    # ================================================================
     async def next(self, command, mission, last_results, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Mission: {json.dumps(mission)[:1200]}\n'
                   f'Results: {json.dumps(last_results)[:1200]}\n\n'
-                  'Reply ONLY: {"done":true,"summary":".."} '
-                  'or {"steps":[...]} or {"pivot":true,"reason":".."}')
+                  'Reply ONLY one of: {"done":true,"summary":".."} '
+                  'or {"steps":[...]} or {"pivot":true,"reason":".."} '
+                  'or {"ask":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
             max_tokens=1200))
 
+    # ================================================================
+    # PIVOT
+    # ================================================================
     async def pivot(self, command, mission, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Failed: {json.dumps(mission)[:1200]}\n\n'
@@ -313,6 +429,9 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1200))
 
+    # ================================================================
+    # REPAIR - self-heal hints
+    # ================================================================
     async def repair(self, command, mission, failed, tools):
         err = json.dumps(failed)[:1200]
         prompt = (
