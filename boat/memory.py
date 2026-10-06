@@ -59,7 +59,6 @@ class Memory:
         self.db.executescript(SCHEMA)
         self.db.commit()
 
-    # missions
     def create_mission(self, mid, command, source):
         now = time.time()
         self.db.execute(
@@ -77,7 +76,6 @@ class Memory:
             (*kw.values(), time.time(), mid))
         self.db.commit()
 
-    # payments
     def record_payment(self, mid, source, amount, currency="USD",
                        ref="", verified=0):
         self.db.execute(
@@ -93,23 +91,21 @@ class Memory:
             "WHERE verified=1 AND ts>=?", (start,))
         return float(cur.fetchone()[0] or 0)
 
-    # lessons
     def add_lesson(self, mid, kind, text):
         self.db.execute(
             "INSERT INTO lessons(mission_id,kind,text,ts) VALUES(?,?,?,?)",
             (mid, kind, text, time.time()))
         self.db.commit()
 
-    # opportunities
     def add_opportunity(self, title, url, pays_today, cost, eta_hours,
                         notes=""):
         self.db.execute(
             "INSERT INTO opportunities(title,url,pays_today,cost,eta_hours,"
             "notes,ts) VALUES(?,?,?,?,?,?,?)",
-            (title, url, int(pays_today), cost, eta_hours, notes, time.time()))
+            (title, url, int(pays_today), cost, eta_hours, notes,
+             time.time()))
         self.db.commit()
 
-    # chat
     def add_chat(self, role, text):
         self.db.execute(
             "INSERT INTO chat_history(role,text,ts) VALUES(?,?,?)",
@@ -123,7 +119,6 @@ class Memory:
         rows.reverse()
         return [{"role": r[0], "text": r[1], "ts": r[2]} for r in rows]
 
-    # context
     def recent_context(self, n=5):
         missions = self.db.execute(
             "SELECT id,command,status,money_today FROM missions "
@@ -139,7 +134,6 @@ class Memory:
             "money_today_total": self.money_today(),
         }
 
-    # kv
     def kv_get(self, k, default=None):
         row = self.db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
         return json.loads(row[0]) if row else default
