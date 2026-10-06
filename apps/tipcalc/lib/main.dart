@@ -15,6 +15,8 @@ class TipCalcApp extends StatelessWidget {
       theme: ThemeData(
         // Use a classic color scheme compatible with all Flutter versions.
         primarySwatch: Colors.teal,
+        // Ensure Material 2 styling to avoid missing TextTheme properties.
+        useMaterial3: false,
       ),
       home: const TipCalculatorScreen(),
     );
@@ -59,7 +61,7 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final formatter = NumberFormat.currency(symbol: '\\$', decimalDigits: 2);
     return Scaffold(
       appBar: AppBar(
         title: const Text('TipCalc'),
@@ -91,7 +93,8 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
             const SizedBox(height: 24),
             Text(
               'Total: ${formatter.format(_total)}',
-              style: Theme.of(context).textTheme.headlineMedium,
+              // Use a TextTheme property that exists across Flutter versions.
+              style: Theme.of(context).textTheme.titleLarge,
               textAlign: TextAlign.center,
             ),
           ],
