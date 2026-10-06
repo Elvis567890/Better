@@ -1,9 +1,7 @@
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file('local.properties')
 if (localPropertiesFile.exists()) {
-    localPropertiesFile.withInputStream { stream ->
-        localProperties.load(stream)
-    }
+    localPropertiesFile.withInputStream { stream -> localProperties.load(stream) }
 }
 
 def flutterRoot = localProperties.getProperty('flutter.sdk')
@@ -29,9 +27,7 @@ android {
     compileSdkVersion 34
 
     sourceSets {
-        main {
-            java.srcDirs = ['src/main/kotlin', 'src/main/java']
-        }
+        main.java.srcDirs += 'src/main/kotlin'
     }
 
     defaultConfig {
@@ -50,14 +46,17 @@ android {
             // signingConfig signingConfigs.release
         }
     }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-
     kotlinOptions {
         jvmTarget = "17"
+    }
+    packagingOptions {
+        resources {
+            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
+        }
     }
 }
 
