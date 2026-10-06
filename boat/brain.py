@@ -15,15 +15,12 @@ log = logging.getLogger("boat.brain")
 
 BATCH = 4
 MAX_ITER = 20
-DAILY_GOAL = float(os.environ.get("BOAT_DAILY_GOAL", "10"))
 DEFAULT_CHAT = (os.environ.get("TELEGRAM_ALLOWED", "").split(",")[0].strip()
                 or "")
 
 
 def _resolve_chat(reply_to):
-    if reply_to:
-        return str(reply_to).strip()
-    return DEFAULT_CHAT
+    return str(reply_to).strip() if reply_to else DEFAULT_CHAT
 
 
 def _norm_step(s):
@@ -52,7 +49,6 @@ class Boat:
     async def handle(self, command, source="github", reply_to=None):
         chat = _resolve_chat(reply_to)
         log.info("handle cmd=%r chat=%r", command, chat)
-
         self.memory.add_chat("owner", command)
         history = self.memory.recent_chat(12)
 
@@ -64,10 +60,7 @@ class Boat:
                         "reply": f"I couldn't think just now ({e})."}
 
         mode = decision.get("mode", "chat")
-        reply = decision.get("reply", "")
-        if not reply:
-            reply = f"(LLM returned empty - mode={mode})\nTry again."
-
+        reply = decision.get("reply", "") or "(thinking...)"
         await self._say(chat, reply)
         self.memory.add_chat("boat", reply)
 
@@ -161,36 +154,32 @@ class Boat:
 
             failed = [r for r in norm if not r.get("ok", True)]
             if failed and it < MAX_ITER - 1:
-                # Universal self-healer
-                healed_plan = []
+                healed = []
                 for f in failed:
                     try:
-                        heal = await call_tool("self.auto_heal", {
+                        h = await call_tool("self.auto_heal", {
                             "failed_step": {"tool": f.get("tool"),
                                             "args": f.get("args", {})},
                             "error": str(f.get("error", "")),
                             "mission_context": {"command": command},
                         })
-                        log.info("auto_heal -> %s", heal)
-                        if heal.get("healed"):
-                            for s in heal.get("next_steps", []):
-                                healed_plan.append(s)
+                        log.info("auto_heal -> %s", h)
+                        if h.get("healed"):
+                            healed.extend(h.get("next_steps", []))
                     except Exception as e:
                         log.warning("auto_heal failed: %s", e)
 
-                if healed_plan:
+                if healed:
                     self.memory.add_lesson(
                         mid, "auto_heal",
-                        f"healed {len(failed)} failure(s), "
-                        f"retrying with {len(healed_plan)} step(s)")
-                    await self._say(
-                        reply_to,
-                        f"Attempt {it+1} failed. Self-healing and retrying.")
-                    plan = [_norm_step(s) for s in healed_plan if s]
+                        f"healed {len(failed)} failure(s)")
+                    await self._say(reply_to,
+                                    f"Attempt {it+1} failed. "
+                                    f"Self-healing and retrying.")
+                    plan = [_norm_step(s) for s in healed if s]
                     plan = [s for s in plan if s.get("tool")][:BATCH]
                     continue
 
-                # Fall back to LLM-based repair
                 try:
                     rep = await self.planner.repair(
                         command, mission, failed, tool_specs())
@@ -200,15 +189,13 @@ class Boat:
                 rep_plan = [_norm_step(s)
                             for s in (rep.get("steps") or []) if s]
                 rep_plan = [s for s in rep_plan if s.get("tool")][:BATCH]
-
                 if rep_plan:
                     plan = rep_plan
                     continue
                 if rep.get("give_up"):
-                    return self._finish(
-                        mid, "blocked",
-                        {"reason": rep.get("reason"),
-                         "results": results_all}, reply_to)
+                    return self._finish(mid, "blocked",
+                                        {"reason": rep.get("reason"),
+                                         "results": results_all}, reply_to)
 
             try:
                 nxt = await self.planner.next(
@@ -262,14 +249,12 @@ class Boat:
         t0 = time.time()
         try:
             res = await call_tool(name, args)
-            return {"tool": name, "ok": True,
-                    "ms": int((time.time() - t0) * 1000),
-                    "result": res, "args": args}
+            return {"tool": name, "ok": True, "args": args,
+                    "ms": int((time.time() - t0) * 1000), "result": res}
         except Exception as e:
             log.exception("tool %s failed", name)
             return {"tool": name, "ok": False, "error": str(e),
-                    "ms": int((time.time() - t0) * 1000),
-                    "args": args}
+                    "args": args, "ms": int((time.time() - t0) * 1000)}
 
     async def _say(self, chat_id, text):
         chat = _resolve_chat(chat_id)
