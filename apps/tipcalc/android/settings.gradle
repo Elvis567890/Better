@@ -1,18 +1,11 @@
 include ':app'
 
-def flutterProjectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def flutterProjectRoot = rootProject.projectDir.parentFile.toPath()
 
-def flutterSdkPath = System.getenv("FLUTTER_ROOT")
-if (flutterSdkPath == null) {
-    // fallback to local.properties
-    def localProperties = new Properties()
-    def localPropertiesFile = rootProject.file('local.properties')
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile.withInputStream { stream -> localProperties.load(stream) }
-        flutterSdkPath = localProperties.getProperty('flutter.sdk')
-    }
+def flutterRoot = System.getenv('FLUTTER_ROOT')
+if (flutterRoot == null) {
+    flutterRoot = "${flutterProjectRoot}/../flutter"
 }
-if (flutterSdkPath == null) {
-    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
-}
+
+def flutterSdkPath = file(flutterRoot)
 apply from: "$flutterSdkPath/packages/flutter_tools/gradle/flutter.gradle"
