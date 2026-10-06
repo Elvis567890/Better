@@ -1,30 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
-void main() {
-  runApp(const TipCalcApp());
-}
+void main() => runApp(const TipCalcApp());
 
 class TipCalcApp extends StatelessWidget {
-  const TipCalcApp({Key? key}) : super(key: key);
+  const TipCalcApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TipCalc',
-      theme: ThemeData(
-        // Use a classic color scheme compatible with all Flutter versions.
-        primarySwatch: Colors.teal,
-        // Ensure Material 2 styling to avoid missing TextTheme properties.
-        useMaterial3: false,
-      ),
+      title: 'Tipcalc',
+      theme: ThemeData(useMaterial3: true),
       home: const TipCalculatorScreen(),
     );
   }
 }
 
 class TipCalculatorScreen extends StatefulWidget {
-  const TipCalculatorScreen({Key? key}) : super(key: key);
+  const TipCalculatorScreen({super.key});
 
   @override
   State<TipCalculatorScreen> createState() => _TipCalculatorScreenState();
@@ -46,13 +38,6 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _billController.addListener(_calculate);
-    _tipController.addListener(_calculate);
-  }
-
-  @override
   void dispose() {
     _billController.dispose();
     _tipController.dispose();
@@ -61,15 +46,11 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(symbol: '\\$', decimalDigits: 2);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('TipCalc'),
-      ),
+      appBar: AppBar(title: const Text('Tipcalc')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
               controller: _billController,
@@ -91,11 +72,14 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
               ),
             ),
             const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _calculate,
+              child: const Text('Calculate Total'),
+            ),
+            const SizedBox(height: 24),
             Text(
-              'Total: ${formatter.format(_total)}',
-              // Use a TextTheme property that exists across Flutter versions.
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
+              'Total: \$${_total.toStringAsFixed(2)}',
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
           ],
         ),
