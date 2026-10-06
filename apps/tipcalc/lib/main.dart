@@ -13,7 +13,8 @@ class TipCalcApp extends StatelessWidget {
     return MaterialApp(
       title: 'TipCalc',
       theme: ThemeData(
-        useMaterial3: true,
+        // "useMaterial3" is only available in newer Flutter releases.
+        // To keep the project compatible with a broader range of SDKs we omit it.
         colorSchemeSeed: Colors.teal,
       ),
       home: const TipCalculatorScreen(),
@@ -59,7 +60,8 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(symbol: '\\$', decimalDigits: 2);
+    // Use a simple dollar sign without escaping – "$" works fine in a single‑quoted string.
+    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
     return Scaffold(
       appBar: AppBar(
         title: const Text('TipCalc'),
@@ -71,7 +73,7 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
           children: [
             TextField(
               controller: _billController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Bill Amount',
                 prefixIcon: Icon(Icons.attach_money),
@@ -81,7 +83,7 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _tipController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Tip %',
                 suffixText: '%',
