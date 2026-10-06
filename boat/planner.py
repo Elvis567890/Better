@@ -1,4 +1,4 @@
-"""LLM planner with deterministic routing for common tasks."""
+"""LLM planner with deterministic routing."""
 import json
 import os
 import re
@@ -193,7 +193,6 @@ class Planner:
             except Exception:
                 return {}
 
-    # ---------------- classify ----------------
     async def classify(self, message, history):
         low = " " + message.lower().strip() + " "
         for trig in EXECUTE_TRIGGERS:
@@ -210,44 +209,29 @@ class Planner:
                          for h in history[-6:])
         prompt = (f"Conversation:\n{hist}\n\n"
                   f'New message: "{message}"\n\n'
-                  "Is this asking you to DO something? Reply with "
-                  '{"mode":"execute","task":"<the task>"}\n'
-                  "Or for small talk: "
-                  '{"mode":"chat","reply":"<answer>"}\n'
-                  "Only JSON.")
+                  "Reply ONLY JSON: "
+                  '{"mode":"chat","reply":"<your answer>"}')
         d = self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
             max_tokens=1500, temperature=0.2))
         reply = d.get("reply") or ""
-        task = d.get("task") or ""
         if "<" in reply and ">" in reply:
             reply = ""
-        if "<" in task and ">" in task:
-            task = ""
-        if d.get("mode") == "execute" and task:
-            return {"mode": "execute",
-                    "reply": "On it. Working now, will report back.",
-                    "task": task, "confirm_action": ""}
         return {"mode": "chat", "reply": reply or "(thinking...)",
                 "task": "", "confirm_action": ""}
 
-    # ---------------- decide ----------------
     async def decide(self, command, scan, tools):
         low = command.lower()
 
-        if any(k in low for k in ("game", "arcade", "puzzle", "platformer")):
-            slug = self._slug_from_command(command)
+        if any(k in low for k in ("game", "arcade", "puzzle")):
+            slug = self._slug(command)
             return {"plan_name": "build_game",
                     "steps": [
                         {"tool": "code.write_flutter_app",
-                         "args": {"spec": command + " (make it a playable game)",
-                                  "app_slug": slug,
-                                  "app_name": slug.replace("_", " ").title()},
+                         "args": {"spec": command + " (make it playable)",
+                                  "app_slug": slug},
                          "why": "write game source"},
-                        {"tool": "self.repair_app",
-                         "args": {"app_slug": slug, "spec": command},
-                         "why": "verify + auto-fix until it builds"},
                         {"tool": "code.build_apk",
                          "args": {"app_slug": slug, "spec": command},
                          "why": "compile and ship"},
@@ -255,39 +239,30 @@ class Planner:
 
         if any(k in low for k in ("app", "android", "flutter", "apk",
                                   "calculator", "mobile", "tool")):
-            slug = self._slug_from_command(command)
+            slug = self._slug(command)
             return {"plan_name": "build_mobile_app",
                     "steps": [
                         {"tool": "code.write_flutter_app",
-                         "args": {"spec": command, "app_slug": slug,
-                                  "app_name": slug.replace("_", " ").title()},
+                         "args": {"spec": command, "app_slug": slug},
                          "why": "write Flutter source"},
-                        {"tool": "self.repair_app",
-                         "args": {"app_slug": slug, "spec": command},
-                         "why": "verify + auto-fix until it builds"},
                         {"tool": "code.build_apk",
                          "args": {"app_slug": slug, "spec": command},
                          "why": "compile and ship"},
                     ]}
 
-        if any(k in low for k in ("website", "site", "landing", "webpage",
-                                  "web page", "html")):
-            slug = self._slug_from_command(command)
+        if any(k in low for k in ("website", "site", "landing", "html")):
+            slug = self._slug(command)
             return {"plan_name": "build_website",
                     "steps": [
                         {"tool": "make.website",
                          "args": {"spec": command, "slug": slug},
                          "why": "build static site"},
-                        {"tool": "self.verify",
-                         "args": {"artifact_kind": "website",
-                                  "identifier": slug},
-                         "why": "check the site exists"},
                     ]}
 
         if any(k in low for k in ("pitch", "article", "doc", "document",
                                   "proposal", "essay", "letter",
                                   "readme", "guide", "post ")):
-            slug = self._slug_from_command(command)
+            slug = self._slug(command)
             return {"plan_name": "write_document",
                     "steps": [
                         {"tool": "make.document",
@@ -295,15 +270,14 @@ class Planner:
                          "why": "write doc"},
                     ]}
 
-        if any(k in low for k in ("script", "python script",
-                                  "bash script", "shell script",
-                                  "javascript", "node script")):
+        if any(k in low for k in ("script", "python", "bash",
+                                  "shell", "javascript")):
             lang = "python"
             if "bash" in low or "shell" in low:
                 lang = "bash"
-            elif "javascript" in low or "node" in low:
+            elif "javascript" in low:
                 lang = "javascript"
-            slug = self._slug_from_command(command)
+            slug = self._slug(command)
             return {"plan_name": "write_script",
                     "steps": [
                         {"tool": "make.script",
@@ -312,7 +286,6 @@ class Planner:
                          "why": "write script"},
                     ]}
 
-        # fallback to LLM
         prompt = (f'Command: "{command}"\n'
                   f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
                   'Reply ONLY JSON: {"plan_name":"..",'
@@ -323,7 +296,7 @@ class Planner:
             max_tokens=1200))
 
     @staticmethod
-    def _slug_from_command(cmd):
+    def _slug(cmd):
         low = cmd.lower()
         m = re.search(r"(?:called|named)\s+([a-z0-9_\-]+)", low)
         if m:
@@ -334,7 +307,6 @@ class Planner:
             return re.sub(r"[^a-z0-9]+", "_", m.group(1))[:30]
         return "task"
 
-    # ---------------- scan ----------------
     async def scan(self, command, context):
         prompt = (f'Command: "{command}"\n'
                   f'Memory: {json.dumps(context)[:1500]}\n\n'
@@ -345,7 +317,6 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1500))
 
-    # ---------------- next ----------------
     async def next(self, command, mission, last_results, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Mission: {json.dumps(mission)[:1200]}\n'
@@ -358,7 +329,6 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1200))
 
-    # ---------------- pivot ----------------
     async def pivot(self, command, mission, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Failed: {json.dumps(mission)[:1200]}\n\n'
@@ -369,18 +339,12 @@ class Planner:
              {"role": "user", "content": prompt}],
             max_tokens=1200))
 
-    # ---------------- repair ----------------
     async def repair(self, command, mission, failed, tools):
         err = json.dumps(failed)[:1500]
         prompt = (
             f'Command: "{command}"\n'
             f'Failed: {err}\n'
             f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
-            'If the error is a missing file/folder, call the tool that '
-            'creates it first, then retry the original.\n'
-            'If a parameter name was wrong, retry with correct names.\n'
-            'If rate limited, retry.\n'
-            'If impossible, give up.\n\n'
             'Reply ONLY JSON: {"steps":[{"tool":"..","args":{}}]} '
             'or {"give_up":true,"reason":".."}')
         return self._json(await self._chat(
