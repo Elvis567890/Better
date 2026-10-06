@@ -1,5 +1,8 @@
-// Settings file for the Android part of the Flutter project.
 include ':app'
 
-setBinding(new Binding([gradle: this]))
-apply from: file('../flutter.gradle')
+def flutterRoot = System.getenv('FLUTTER_ROOT')
+if (flutterRoot == null) {
+    // Fallback to relative path if FLUTTER_ROOT is not set.
+    flutterRoot = new File(rootProject.projectDir.parentFile, '../flutter').absolutePath
+}
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
