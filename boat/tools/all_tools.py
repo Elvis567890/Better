@@ -1,6 +1,7 @@
 """BOAT - every tool in one file.
 
 Import once and every capability registers. Nothing else to load.
+Uses dynamic model discovery so it never 404s on a retired model name.
 """
 import asyncio
 import base64
@@ -64,27 +65,103 @@ async def _gh_exists(repo, path):
 
 
 # ==================================================================
-# LLM helper
+# LLM with model discovery
 # ==================================================================
+_MODEL_CACHE = {"list": None, "picked": None}
+
+
+async def _discover_models():
+    """Fetch the live model list from the provider and pick the best one."""
+    if _MODEL_CACHE["picked"]:
+        return _MODEL_CACHE["picked"]
+
+    base = os.environ.get("BOAT_LLM_BASE", "https://api.groq.com/openai/v1")
+    key = os.environ["BOAT_LLM_KEY"]
+
+    preferred_order = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+    ]
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(f"{base}/models",
+                            headers={"Authorization": f"Bearer {key}"})
+            r.raise_for_status()
+            data = r.json()
+            ids = [m.get("id") or m.get("name") or ""
+                   for m in (data.get("data") or data.get("models") or [])]
+            ids = [i for i in ids if i]
+            for want in preferred_order:
+                if want in ids:
+                    _MODEL_CACHE["picked"] = want
+                    _MODEL_CACHE["list"] = ids
+                    print(f"[all_tools] model picked: {want}")
+                    return want
+            if ids:
+                _MODEL_CACHE["picked"] = ids[0]
+                _MODEL_CACHE["list"] = ids
+                print(f"[all_tools] model picked (fallback): {ids[0]}")
+                return ids[0]
+    except Exception as e:
+        print(f"[all_tools] discovery failed: {e}")
+
+    fallback = os.environ.get("BOAT_LLM_MODEL",
+                              "llama-3.3-70b-versatile")
+    _MODEL_CACHE["picked"] = fallback
+    print(f"[all_tools] model picked (env fallback): {fallback}")
+    return fallback
+
+
 async def _llm(prompt, max_tokens=8000, temp=0.2):
     base = os.environ.get("BOAT_LLM_BASE", "https://api.groq.com/openai/v1")
     key = os.environ["BOAT_LLM_KEY"]
-    model = os.environ.get("BOAT_LLM_MODEL", "llama-3.3-70b-versatile")
-    async with httpx.AsyncClient(timeout=180) as c:
-        r = await c.post(
-            f"{base}/chat/completions",
-            headers={"Authorization": f"Bearer {key}"},
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": temp,
-                "max_tokens": max_tokens,
-            },
-        )
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+
+    candidates = []
+    top = await _discover_models()
+    if top:
+        candidates.append(top)
+    env_model = os.environ.get("BOAT_LLM_MODEL")
+    if env_model and env_model not in candidates:
+        candidates.append(env_model)
+    for m in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant"):
+        if m not in candidates:
+            candidates.append(m)
+
+    last_error = None
+    for model in candidates:
+        try:
+            async with httpx.AsyncClient(timeout=180) as c:
+                r = await c.post(
+                    f"{base}/chat/completions",
+                    headers={"Authorization": f"Bearer {key}"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": temp,
+                        "max_tokens": max_tokens,
+                    },
+                )
+                if r.status_code == 404:
+                    print(f"[all_tools] {model} 404, trying next")
+                    last_error = f"404 {model}"
+                    continue
+                r.raise_for_status()
+                return r.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            last_error = str(e)[:200]
+            print(f"[all_tools] {model} failed: {last_error}")
+            continue
+
+    raise RuntimeError(f"all models failed. last: {last_error}")
 
 
+# ==================================================================
+# Small helpers
+# ==================================================================
 def _slugify(s):
     s = (s or "item").lower().strip()
     s = re.sub(r"[^a-z0-9]+", "_", s)
