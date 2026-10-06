@@ -71,7 +71,7 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
           children: [
             TextField(
               controller: _billController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Bill Amount',
                 prefixIcon: Icon(Icons.attach_money),
@@ -81,7 +81,7 @@ class _TipCalculatorScreenState extends State<TipCalculatorScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _tipController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'Tip %',
                 suffixText: '%',
