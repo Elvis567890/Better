@@ -1,6 +1,6 @@
 """BOAT - every tool in one file.
 
-Import once and every capability registers. Nothing else to load.
+Includes full Android scaffolding so Flutter apps actually compile into APKs.
 Uses dynamic model discovery so it never 404s on a retired model name.
 """
 import asyncio
@@ -71,14 +71,13 @@ _MODEL_CACHE = {"list": None, "picked": None}
 
 
 async def _discover_models():
-    """Fetch the live model list from the provider and pick the best one."""
     if _MODEL_CACHE["picked"]:
         return _MODEL_CACHE["picked"]
 
     base = os.environ.get("BOAT_LLM_BASE", "https://api.groq.com/openai/v1")
     key = os.environ["BOAT_LLM_KEY"]
 
-    preferred_order = [
+    preferred = [
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",
         "openai/gpt-oss-120b",
@@ -95,15 +94,13 @@ async def _discover_models():
             ids = [m.get("id") or m.get("name") or ""
                    for m in (data.get("data") or data.get("models") or [])]
             ids = [i for i in ids if i]
-            for want in preferred_order:
+            for want in preferred:
                 if want in ids:
                     _MODEL_CACHE["picked"] = want
-                    _MODEL_CACHE["list"] = ids
                     print(f"[all_tools] model picked: {want}")
                     return want
             if ids:
                 _MODEL_CACHE["picked"] = ids[0]
-                _MODEL_CACHE["list"] = ids
                 print(f"[all_tools] model picked (fallback): {ids[0]}")
                 return ids[0]
     except Exception as e:
@@ -116,7 +113,7 @@ async def _discover_models():
     return fallback
 
 
-async def _llm(prompt, max_tokens=8000, temp=0.2):
+async def _llm(prompt, max_tokens=12000, temp=0.2):
     base = os.environ.get("BOAT_LLM_BASE", "https://api.groq.com/openai/v1")
     key = os.environ["BOAT_LLM_KEY"]
 
@@ -146,7 +143,7 @@ async def _llm(prompt, max_tokens=8000, temp=0.2):
                     },
                 )
                 if r.status_code == 404:
-                    print(f"[all_tools] {model} 404, trying next")
+                    print(f"[all_tools] {model} 404, next")
                     last_error = f"404 {model}"
                     continue
                 r.raise_for_status()
@@ -159,9 +156,6 @@ async def _llm(prompt, max_tokens=8000, temp=0.2):
     raise RuntimeError(f"all models failed. last: {last_error}")
 
 
-# ==================================================================
-# Small helpers
-# ==================================================================
 def _slugify(s):
     s = (s or "item").lower().strip()
     s = re.sub(r"[^a-z0-9]+", "_", s)
@@ -208,10 +202,11 @@ def _db():
 
 
 # ==================================================================
-# Flutter app - write
+# Flutter app - write (WITH FULL ANDROID SCAFFOLDING)
 # ==================================================================
 @tool("code.write_flutter_app",
-      "Write a complete Flutter app and push it to apps/<slug>/.",
+      "Write a complete Flutter app - including Android scaffolding - "
+      "and push it to apps/<slug>/. Required for the APK to compile.",
       {"type": "object", "properties": {
           "spec": {"type": "string"},
           "app_slug": {"type": "string"},
@@ -228,7 +223,7 @@ async def write_flutter_app(spec, app_slug=None, project_name=None,
     package_name = _pick(package_name, f"com.boat.{slug}")
 
     prompt = f"""You are a senior Flutter engineer.
-Write a COMPLETE, COMPILABLE Flutter app.
+Write a COMPLETE, COMPILABLE Flutter app that can build an APK.
 
 --- SPEC ---
 {spec}
@@ -237,23 +232,140 @@ Write a COMPLETE, COMPILABLE Flutter app.
 App name: {app_name}
 Package name: {package_name}
 
-Return ONLY a JSON object:
+Return ONLY a JSON object with EXACTLY these files:
 
 {{
   "files": {{
-    "pubspec.yaml": "...",
-    "lib/main.dart": "..."
+    "pubspec.yaml": "<full pubspec.yaml>",
+    "lib/main.dart": "<full Dart code>",
+    "analysis_options.yaml": "<basic analysis options>",
+    "android/app/build.gradle": "<full gradle file>",
+    "android/build.gradle": "<full gradle file>",
+    "android/settings.gradle": "<full gradle file>",
+    "android/gradle.properties": "<full gradle properties>",
+    "android/app/src/main/AndroidManifest.xml": "<full manifest>",
+    "android/app/src/main/kotlin/MainActivity.kt": "<Kotlin MainActivity>"
   }}
 }}
 
-Rules:
-- Only well-known packages on pub.dev. Stable versions.
-- main.dart must be self-contained and compile.
-- Use Material 3.
-- No TODOs.
+CRITICAL RULES - the APK build will fail if you miss any:
+1. Every file MUST be complete and valid.
+2. Flutter 3.22+, Dart 3.4+, minSdk 21, targetSdk 34.
+3. Package/applicationId: {package_name}
+4. pubspec.yaml must have exactly this structure:
+     name: {slug}
+     description: A simple Flutter app
+     publish_to: 'none'
+     version: 1.0.0+1
+     environment:
+       sdk: '>=3.4.0 <4.0.0'
+     dependencies:
+       flutter:
+         sdk: flutter
+       cupertino_icons: ^1.0.6
+     dev_dependencies:
+       flutter_test:
+         sdk: flutter
+       flutter_lints: ^4.0.0
+     flutter:
+       uses-material-design: true
+5. main.dart must compile with Flutter 3.22+. Use Material 3.
+6. android/settings.gradle must use the modern Flutter plugin format:
+     pluginManagement {{
+         def flutterSdkPath = {{
+             def properties = new Properties()
+             file("local.properties").withInputStream {{ properties.load(it) }}
+             def flutterSdkPath = properties.getProperty("flutter.sdk")
+             assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+             return flutterSdkPath
+         }}()
+         includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+         repositories {{ google(); mavenCentral(); gradlePluginPortal() }}
+     }}
+     plugins {{
+         id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+         id "com.android.application" version "8.1.0" apply false
+         id "org.jetbrains.kotlin.android" version "1.9.22" apply false
+     }}
+     include ":app"
+7. android/build.gradle must be minimal:
+     allprojects {{
+         repositories {{ google(); mavenCentral() }}
+     }}
+     rootProject.buildDir = "../build"
+     subprojects {{ project.buildDir = "${{rootProject.buildDir}}/${{project.name}}" }}
+     subprojects {{ project.evaluationDependsOn(":app") }}
+     tasks.register("clean", Delete) {{ delete rootProject.buildDir }}
+8. android/app/build.gradle must use the modern plugin loader:
+     plugins {{
+         id "com.android.application"
+         id "kotlin-android"
+         id "dev.flutter.flutter-gradle-plugin"
+     }}
+     android {{
+         namespace = "{package_name}"
+         compileSdk = 34
+         ndkVersion = flutter.ndkVersion
+         compileOptions {{ sourceCompatibility = JavaVersion.VERSION_17
+                          targetCompatibility = JavaVersion.VERSION_17 }}
+         kotlinOptions {{ jvmTarget = "17" }}
+         defaultConfig {{
+             applicationId = "{package_name}"
+             minSdk = 21
+             targetSdk = 34
+             versionCode = flutter.versionCode
+             versionName = flutter.versionName
+         }}
+         buildTypes {{
+             release {{
+                 signingConfig = signingConfigs.debug
+             }}
+         }}
+     }}
+     flutter {{ source = "../.." }}
+9. android/gradle.properties:
+     org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=2G
+     android.useAndroidX=true
+     android.enableJetifier=true
+10. AndroidManifest.xml at android/app/src/main/:
+     <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+       <application android:label="{app_name}" android:name="${{applicationName}}"
+                    android:icon="@mipmap/ic_launcher">
+         <activity android:name=".MainActivity"
+                   android:exported="true"
+                   android:launchMode="singleTop"
+                   android:theme="@style/LaunchTheme"
+                   android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+                   android:hardwareAccelerated="true"
+                   android:windowSoftInputMode="adjustResize">
+           <meta-data android:name="io.flutter.embedding.android.NormalTheme"
+                      android:resource="@style/NormalTheme" />
+           <intent-filter>
+             <action android:name="android.intent.action.MAIN"/>
+             <category android:name="android.intent.category.LAUNCHER"/>
+           </intent-filter>
+         </activity>
+         <meta-data android:name="flutterEmbedding"
+                    android:value="2" />
+       </application>
+       <queries>
+         <intent>
+           <action android:name="android.intent.action.PROCESS_TEXT"/>
+           <data android:mimeType="text/plain"/>
+         </intent>
+       </queries>
+     </manifest>
+11. MainActivity.kt at android/app/src/main/kotlin/:
+     package {package_name}
+     import io.flutter.embedding.android.FlutterActivity
+     class MainActivity: FlutterActivity()
+12. analysis_options.yaml: include: package:flutter_lints/flutter.yaml
+13. No TODOs. No placeholders. No truncation.
+
+Return ONLY the JSON. No prose. No code fences.
 """
     try:
-        raw = await _llm(prompt, max_tokens=8000)
+        raw = await _llm(prompt, max_tokens=12000)
     except Exception as e:
         return {"ok": False, "error": f"llm failed: {e}"}
     data = _parse_files(raw)
@@ -262,15 +374,34 @@ Rules:
                 "head": (raw or "")[:400]}
 
     repo = os.environ["GITHUB_REPOSITORY"]
+    pushed = []
     for rel, content in data["files"].items():
-        await _gh_put(repo, f"apps/{slug}/{rel}", content,
-                      f"boat: write {slug}/{rel}")
+        ok = await _gh_put(repo, f"apps/{slug}/{rel}", content,
+                           f"boat: write {slug}/{rel}")
+        pushed.append({"path": rel, "ok": ok})
 
-    ok = (await _gh_exists(repo, f"apps/{slug}/pubspec.yaml")
-          and await _gh_exists(repo, f"apps/{slug}/lib/main.dart"))
-    return {"ok": ok, "app_slug": slug, "app_name": app_name,
+    # verify the essential files exist
+    need = [
+        "pubspec.yaml",
+        "lib/main.dart",
+        "android/app/build.gradle",
+        "android/build.gradle",
+        "android/settings.gradle",
+        "android/app/src/main/AndroidManifest.xml",
+    ]
+    missing = []
+    for rel in need:
+        if not await _gh_exists(repo, f"apps/{slug}/{rel}"):
+            missing.append(rel)
+
+    if missing:
+        return {"ok": False, "error": "essential files missing",
+                "missing": missing, "pushed": pushed}
+
+    return {"ok": True, "app_slug": slug, "app_name": app_name,
             "package_name": package_name,
-            "files_written": len(data["files"])}
+            "files_written": len(pushed),
+            "files": [p["path"] for p in pushed]}
 
 
 # ==================================================================
@@ -300,7 +431,7 @@ async def build_apk(app_slug=None, project_name=None, app_name=None,
     if not await _gh_exists(repo, f"apps/{slug}/pubspec.yaml"):
         if not spec:
             return {"ok": False,
-                    "error": f"apps/{slug} missing and no spec to write it",
+                    "error": f"apps/{slug} missing and no spec",
                     "next_action": "call code.write_flutter_app first"}
         wr = await write_flutter_app(spec=spec, app_slug=slug,
                                      app_name=app_name,
@@ -355,17 +486,26 @@ ERROR:
 {error_text[:2000]}
 
 CURRENT pubspec.yaml:
-{pubspec_text}
+{pubspec_text[:1500]}
 
 CURRENT lib/main.dart:
-{main_text[:6000]}
+{main_text[:5000]}
+
+If the error mentions a MISSING file (like android/app/build.gradle),
+return ALL the android files needed:
+  android/app/build.gradle
+  android/build.gradle
+  android/settings.gradle
+  android/gradle.properties
+  android/app/src/main/AndroidManifest.xml
+
+Otherwise only return the files you changed.
 
 Return ONLY JSON:
-{{"files": {{"lib/main.dart": "...", "pubspec.yaml": "..."}}}}
-Include only files you changed.
+{{"files": {{"<path>": "<content>"}}}}
 """
     try:
-        raw = await _llm(prompt, max_tokens=8000)
+        raw = await _llm(prompt, max_tokens=12000)
     except Exception as e:
         return {"ok": False, "error": str(e)}
     data = _parse_files(raw)
