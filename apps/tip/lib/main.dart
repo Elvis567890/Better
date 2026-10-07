@@ -70,7 +70,7 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
                     max: 100,
                     divisions: 100,
                     value: _tipPercent,
-                    label: '${_tipPercent.toInt()}%',
+                    label: '${_tipPercent.round()}%',
                     onChanged: (value) {
                       setState(() {
                         _tipPercent = value;
@@ -78,7 +78,7 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
                     },
                   ),
                 ),
-                Text('${_tipPercent.toInt()}%')
+                SizedBox(width: 48, child: Text('${_tipPercent.round()}%')),
               ],
             ),
             const SizedBox(height: 16),
@@ -88,9 +88,7 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.remove),
-                  onPressed: _people > 1
-                      ? () => setState(() => _people--)
-                      : null,
+                  onPressed: _people > 1 ? () => setState(() => _people--) : null,
                 ),
                 Text('$_people'),
                 IconButton(
@@ -100,27 +98,23 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
               ],
             ),
             const Divider(height: 32),
-            _buildResultRow('Bill', _bill),
-            _buildResultRow('Tip', _tipAmount),
+            _buildResultRow('Tip Amount', _tipAmount),
             _buildResultRow('Total', _total),
-            const Divider(),
-            _buildResultRow('Per Person', _perPerson, isBold: true),
+            _buildResultRow('Per Person', _perPerson),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildResultRow(String label, double amount, {bool isBold = false}) {
+  Widget _buildResultRow(String label, double value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
-          Text('\\$${amount.toStringAsFixed(2)}',
-              style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(label),
+          const Spacer(),
+          Text('\$${value.toStringAsFixed(2)}'),
         ],
       ),
     );
