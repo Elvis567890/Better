@@ -1,0 +1,125 @@
+name: BOAT doctor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install deps
+        run: |
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install httpx
+
+      - name: File inventory
+        run: |
+          echo "===== boat/ files ====="
+          find boat -name "*.py" -type f | sort || echo "no boat/ dir"
+          echo
+          echo "===== workflows ====="
+          find .github/workflows -name "*.yml" -type f | sort || true
+          echo
+          echo "===== root files ====="
+          ls -1 *.txt *.py 2>/dev/null || true
+
+      - name: Try loading all tools
+        env:
+          BOAT_LLM_KEY:        ${{ secrets.BOAT_LLM_KEY }}
+          BOAT_LLM_BASE:       ${{ secrets.BOAT_LLM_BASE }}
+          BOAT_LLM_MODEL:      ${{ secrets.BOAT_LLM_MODEL }}
+          TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALLOWED:    ${{ secrets.TELEGRAM_ALLOWED }}
+          GITHUB_TOKEN:        ${{ secrets.BOAT_GH_TOKEN }}
+          GITHUB_REPOSITORY:   ${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import os, sys, traceback
+          print("=== env check ===")
+          for k in ("BOAT_LLM_KEY","TELEGRAM_BOT_TOKEN","TELEGRAM_ALLOWED","GITHUB_TOKEN"):
+              v = os.environ.get(k,"")
+              print(f"{k}: {'set' if v else 'MISSING'} (len={len(v)})")
+          print()
+          print("=== loading tools ===")
+          try:
+              from boat.tools import load_all, REGISTRY
+              load_all()
+              print()
+              print(f"REGISTRY: {len(REGISTRY)} tools")
+              for name in sorted(REGISTRY.keys()):
+                  print(f"  - {name}")
+          except Exception as e:
+              print(f"FATAL: {e}")
+              traceback.print_exc()
+          PY
+
+      - name: Test LLM
+        env:
+          BOAT_LLM_KEY:   ${{ secrets.BOAT_LLM_KEY }}
+          BOAT_LLM_BASE:  ${{ secrets.BOAT_LLM_BASE }}
+          BOAT_LLM_MODEL: ${{ secrets.BOAT_LLM_MODEL }}
+        run: |
+          python - <<'PY'
+          import asyncio, os, httpx
+          base = os.environ.get("BOAT_LLM_BASE","https://api.groq.com/openai/v1").rstrip("/")
+          key  = os.environ.get("BOAT_LLM_KEY","")
+          if not key:
+              print("LLM KEY MISSING"); raise SystemExit(0)
+          async def main():
+              async with httpx.AsyncClient(timeout=30) as c:
+                  r = await c.get(f"{base}/models",
+                                  headers={"Authorization": f"Bearer {key}"})
+                  print("GET /models:", r.status_code)
+                  if r.status_code == 200:
+                      ids = [m.get("id","") for m in r.json().get("data",[])]
+                      print("available:", ids[:10])
+                      if not ids:
+                          return
+                      model = os.environ.get("BOAT_LLM_MODEL") or ids[0]
+                      r2 = await c.post(f"{base}/chat/completions",
+                          headers={"Authorization": f"Bearer {key}"},
+                          json={"model": model,
+                                "messages":[{"role":"user","content":"say ok"}],
+                                "max_tokens":10})
+                      print("POST chat:", r2.status_code)
+                      print("body:", r2.text[:300])
+          asyncio.run(main())
+          PY
+
+      - name: Test Telegram
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT:  ${{ secrets.TELEGRAM_ALLOWED }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$CHAT" ]; then
+            echo "Telegram secrets missing"; exit 0
+          fi
+          curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+            -d chat_id="${CHAT}" \
+            -d text="🩺 BOAT doctor: all checks done. See the workflow log for details." \
+            | head -c 300
+          echo
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "=== SUMMARY ==="
+          echo "Look above for:"
+          echo "  1. Which boat/*.py files exist"
+          echo "  2. Which tools registered (OK/FAIL lines)"
+          echo "  3. LLM /models status and available models"
+          echo "  4. POST chat status (200 = LLM works)"
+          echo "  5. Telegram message ID (if reachable)"
