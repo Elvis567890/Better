@@ -209,8 +209,7 @@ class Planner:
                          for h in history[-6:])
         prompt = (f"Conversation:\n{hist}\n\n"
                   f'New message: "{message}"\n\n'
-                  "Reply ONLY JSON: "
-                  '{"mode":"chat","reply":"<your answer>"}')
+                  'Reply ONLY JSON: {"mode":"chat","reply":"<your answer>"}')
         d = self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
