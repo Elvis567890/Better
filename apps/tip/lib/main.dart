@@ -11,10 +11,7 @@ class TipApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Tip',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.teal,
-      ),
+      theme: ThemeData(useMaterial3: true),
       home: const TipCalculatorPage(),
     );
   }
@@ -29,30 +26,19 @@ class TipCalculatorPage extends StatefulWidget {
 
 class _TipCalculatorPageState extends State<TipCalculatorPage> {
   final TextEditingController _billController = TextEditingController();
-  final TextEditingController _peopleController = TextEditingController(text: '1');
   double _tipPercent = 15;
+  int _people = 1;
+
+  double get _bill => double.tryParse(_billController.text) ?? 0.0;
+  double get _tipAmount => _bill * _tipPercent / 100;
+  double get _total => _bill + _tipAmount;
+  double get _perPerson => _people > 0 ? _total / _people : 0.0;
 
   @override
   void dispose() {
     _billController.dispose();
-    _peopleController.dispose();
     super.dispose();
   }
-
-  double get _bill {
-    final text = _billController.text;
-    return double.tryParse(text) ?? 0.0;
-  }
-
-  int get _people {
-    final text = _peopleController.text;
-    final value = int.tryParse(text);
-    return (value != null && value > 0) ? value : 1;
-  }
-
-  double get _tipAmount => _bill * _tipPercent / 100;
-  double get _total => _bill + _tipAmount;
-  double get _perPerson => _total / _people;
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +54,7 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
               controller: _billController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                labelText: 'Bill amount',
+                labelText: 'Bill Amount',
                 prefixIcon: Icon(Icons.attach_money),
                 border: OutlineInputBorder(),
               ),
@@ -84,7 +70,7 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
                     max: 100,
                     divisions: 100,
                     value: _tipPercent,
-                    label: '${_tipPercent.round()}%',
+                    label: '${_tipPercent.toInt()}%',
                     onChanged: (value) {
                       setState(() {
                         _tipPercent = value;
@@ -92,59 +78,51 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
                     },
                   ),
                 ),
-                Text('${_tipPercent.round()}%'),
+                Text('${_tipPercent.toInt()}%')
               ],
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _peopleController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Number of people',
-                prefixIcon: Icon(Icons.person),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 24),
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    _ResultRow(label: 'Bill', value: _bill),
-                    _ResultRow(label: 'Tip', value: _tipAmount),
-                    const Divider(),
-                    _ResultRow(label: 'Total', value: _total),
-                    const Divider(),
-                    _ResultRow(label: 'Per Person', value: _perPerson),
-                  ],
+            Row(
+              children: [
+                const Text('People'),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.remove),
+                  onPressed: _people > 1
+                      ? () => setState(() => _people--)
+                      : null,
                 ),
-              ),
+                Text('$_people'),
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: () => setState(() => _people++),
+                ),
+              ],
             ),
+            const Divider(height: 32),
+            _buildResultRow('Bill', _bill),
+            _buildResultRow('Tip', _tipAmount),
+            _buildResultRow('Total', _total),
+            const Divider(),
+            _buildResultRow('Per Person', _perPerson, isBold: true),
           ],
         ),
       ),
     );
   }
-}
 
-class _ResultRow extends StatelessWidget {
-  final String label;
-  final double value;
-
-  const _ResultRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 16)),
-        Text('\$${value.toStringAsFixed(2)}',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      ],
+  Widget _buildResultRow(String label, double amount, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text('\\$${amount.toStringAsFixed(2)}',
+              style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+        ],
+      ),
     );
   }
 }
