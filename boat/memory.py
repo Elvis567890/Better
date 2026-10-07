@@ -1,53 +1,40 @@
-"""BOAT memory: missions, payments, opportunities, lessons, chat, vault."""
+"""BOAT memory."""
 import json
 import os
 import sqlite3
 import time
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS missions(
   id TEXT PRIMARY KEY, command TEXT, source TEXT, status TEXT,
   money_today REAL DEFAULT 0, pivots INTEGER DEFAULT 0,
   created REAL, updated REAL, meta TEXT);
-
 CREATE TABLE IF NOT EXISTS payments(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mission_id TEXT, source TEXT, amount REAL, currency TEXT,
   ref TEXT, verified INTEGER DEFAULT 0, ts REAL);
-
-CREATE TABLE IF NOT EXISTS opportunities(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT, url TEXT, pays_today INTEGER, cost REAL,
-  eta_hours REAL, notes TEXT, ts REAL);
-
 CREATE TABLE IF NOT EXISTS lessons(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mission_id TEXT, kind TEXT, text TEXT, ts REAL);
-
 CREATE TABLE IF NOT EXISTS chat_history(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   role TEXT, text TEXT, ts REAL);
-
 CREATE TABLE IF NOT EXISTS pending_payments(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   client TEXT, amount REAL, currency TEXT, ref TEXT,
   raw TEXT, mission_id TEXT, status TEXT, created REAL);
-
 CREATE TABLE IF NOT EXISTS vault(
   service TEXT PRIMARY KEY, kind TEXT, username TEXT, password TEXT,
   extra TEXT, notes TEXT, created REAL, last_used REAL);
-
 CREATE TABLE IF NOT EXISTS projects(
   id TEXT PRIMARY KEY, title TEXT, goal TEXT, status TEXT,
   stage TEXT, plan TEXT, done TEXT, blocked TEXT, notes TEXT,
   created REAL, updated REAL);
-
-CREATE TABLE IF NOT EXISTS leads(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT, contact TEXT, channel TEXT, region TEXT, pitch TEXT,
-  status TEXT, created REAL, updated REAL);
-
+CREATE TABLE IF NOT EXISTS big_projects(
+  id TEXT PRIMARY KEY, title TEXT, goal TEXT, platform TEXT,
+  total_sprints INTEGER, done_sprints INTEGER,
+  current_sprint INTEGER, sprint_list TEXT, status TEXT,
+  slug TEXT, created REAL, updated REAL);
 CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);
 """
 
@@ -68,8 +55,7 @@ class Memory:
         self.db.commit()
 
     def update_mission(self, mid, **kw):
-        if not kw:
-            return
+        if not kw: return
         cols = ", ".join(f"{k}=?" for k in kw)
         self.db.execute(
             f"UPDATE missions SET {cols}, updated=? WHERE id=?",
@@ -97,15 +83,6 @@ class Memory:
             (mid, kind, text, time.time()))
         self.db.commit()
 
-    def add_opportunity(self, title, url, pays_today, cost, eta_hours,
-                        notes=""):
-        self.db.execute(
-            "INSERT INTO opportunities(title,url,pays_today,cost,eta_hours,"
-            "notes,ts) VALUES(?,?,?,?,?,?,?)",
-            (title, url, int(pays_today), cost, eta_hours, notes,
-             time.time()))
-        self.db.commit()
-
     def add_chat(self, role, text):
         self.db.execute(
             "INSERT INTO chat_history(role,text,ts) VALUES(?,?,?)",
@@ -124,8 +101,7 @@ class Memory:
             "SELECT id,command,status,money_today FROM missions "
             "ORDER BY created DESC LIMIT ?", (n,)).fetchall()
         lessons = self.db.execute(
-            "SELECT kind,text FROM lessons ORDER BY ts DESC LIMIT 10"
-        ).fetchall()
+            "SELECT kind,text FROM lessons ORDER BY ts DESC LIMIT 10").fetchall()
         return {
             "recent_missions": [
                 {"id": m[0], "command": m[1], "status": m[2],
