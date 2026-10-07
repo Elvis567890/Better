@@ -1,1 +1,27 @@
-<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n  <application android:label=\"Tip\" android:name=\"${applicationName}\"\n               android:icon=\"@mipmap/ic_launcher\">\n    <activity android:name=\".MainActivity\"\n              android:exported=\"true\"\n              android:launchMode=\"singleTop\"\n              android:theme=\"@style/LaunchTheme\"\n              android:configChanges=\"orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode\"\n              android:hardwareAccelerated=\"true\"\n              android:windowSoftInputMode=\"adjustResize\">\n      <meta-data android:name=\"io.flutter.embedding.android.NormalTheme\"\n                 android:resource=\"@style/NormalTheme\" />\n      <intent-filter>\n        <action android:name=\"android.intent.action.MAIN\"/>\n        <category android:name=\"android.intent.category.LAUNCHER\"/>\n      </intent-filter>\n    </activity>\n    <meta-data android:name=\"flutterEmbedding\"\n               android:value=\"2\" />\n  </application>\n  <queries>\n    <intent>\n      <action android:name=\"android.intent.action.PROCESS_TEXT\"/>\n      <data android:mimeType=\"text/plain\"/>\n    </intent>\n  </queries>\n</manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application android:label="Tip" android:name="${applicationName}"
+               android:icon="@mipmap/ic_launcher">
+    <activity android:name=".MainActivity"
+              android:exported="true"
+              android:launchMode="singleTop"
+              android:theme="@style/LaunchTheme"
+              android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+              android:hardwareAccelerated="true"
+              android:windowSoftInputMode="adjustResize">
+      <meta-data android:name="io.flutter.embedding.android.NormalTheme"
+                 android:resource="@style/NormalTheme" />
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+    <meta-data android:name="flutterEmbedding"
+               android:value="2" />
+  </application>
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.PROCESS_TEXT"/>
+      <data android:mimeType="text/plain"/>
+    </intent>
+  </queries>
+</manifest>
