@@ -1,0 +1,858 @@
+name: Install all BOAT files
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create directories
+        run: mkdir -p boat/tools boat/triggers
+
+      - name: Write all Python files
+        run: |
+          python - <<'PYTHON_INSTALLER'
+          import os, pathlib
+
+          files = {}
+
+          # ============ boat/__init__.py ============
+          files["boat/__init__.py"] = "# BOAT package\n"
+
+          # ============ boat/run_once.py ============
+          files["boat/run_once.py"] = '''"""Entrypoint for GitHub Actions."""
+          import asyncio
+          import logging
+          import os
+
+          from .brain import Boat
+
+          logging.basicConfig(
+              level=logging.INFO,
+              format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+          )
+
+
+          def main():
+              cmd = os.environ.get("BOAT_CMD") or "make money anywhere today"
+              chat = os.environ.get("BOAT_CHAT") or None
+              asyncio.run(Boat().handle(cmd, source="github", reply_to=chat))
+
+
+          if __name__ == "__main__":
+              main()
+          '''
+
+          # ============ boat/memory.py ============
+          files["boat/memory.py"] = '''"""BOAT memory."""
+          import json
+          import os
+          import sqlite3
+          import time
+
+          SCHEMA = """
+          CREATE TABLE IF NOT EXISTS missions(
+            id TEXT PRIMARY KEY, command TEXT, source TEXT, status TEXT,
+            money_today REAL DEFAULT 0, pivots INTEGER DEFAULT 0,
+            created REAL, updated REAL, meta TEXT);
+          CREATE TABLE IF NOT EXISTS payments(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mission_id TEXT, source TEXT, amount REAL, currency TEXT,
+            ref TEXT, verified INTEGER DEFAULT 0, ts REAL);
+          CREATE TABLE IF NOT EXISTS lessons(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mission_id TEXT, kind TEXT, text TEXT, ts REAL);
+          CREATE TABLE IF NOT EXISTS chat_history(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role TEXT, text TEXT, ts REAL);
+          CREATE TABLE IF NOT EXISTS pending_payments(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client TEXT, amount REAL, currency TEXT, ref TEXT,
+            raw TEXT, mission_id TEXT, status TEXT, created REAL);
+          CREATE TABLE IF NOT EXISTS vault(
+            service TEXT PRIMARY KEY, kind TEXT, username TEXT, password TEXT,
+            extra TEXT, notes TEXT, created REAL, last_used REAL);
+          CREATE TABLE IF NOT EXISTS projects(
+            id TEXT PRIMARY KEY, title TEXT, goal TEXT, status TEXT,
+            stage TEXT, plan TEXT, done TEXT, blocked TEXT, notes TEXT,
+            created REAL, updated REAL);
+          CREATE TABLE IF NOT EXISTS big_projects(
+            id TEXT PRIMARY KEY, title TEXT, goal TEXT, platform TEXT,
+            total_sprints INTEGER, done_sprints INTEGER,
+            current_sprint INTEGER, sprint_list TEXT, status TEXT,
+            slug TEXT, created REAL, updated REAL);
+          CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);
+          """
+
+
+          class Memory:
+              def __init__(self, path=None):
+                  self.path = path or os.environ.get("BOAT_DB", "boat.db")
+                  self.db = sqlite3.connect(self.path, check_same_thread=False)
+                  self.db.executescript(SCHEMA)
+                  self.db.commit()
+
+              def create_mission(self, mid, command, source):
+                  now = time.time()
+                  self.db.execute(
+                      "INSERT INTO missions(id,command,source,status,created,updated)"
+                      " VALUES(?,?,?,?,?,?)",
+                      (mid, command, source, "thinking", now, now))
+                  self.db.commit()
+
+              def update_mission(self, mid, **kw):
+                  if not kw: return
+                  cols = ", ".join(f"{k}=?" for k in kw)
+                  self.db.execute(
+                      f"UPDATE missions SET {cols}, updated=? WHERE id=?",
+                      (*kw.values(), time.time(), mid))
+                  self.db.commit()
+
+              def record_payment(self, mid, source, amount, currency="USD",
+                                 ref="", verified=0):
+                  self.db.execute(
+                      "INSERT INTO payments(mission_id,source,amount,currency,ref,"
+                      "verified,ts) VALUES(?,?,?,?,?,?,?)",
+                      (mid, source, amount, currency, ref, verified, time.time()))
+                  self.db.commit()
+
+              def money_today(self):
+                  start = time.time() - 86400
+                  cur = self.db.execute(
+                      "SELECT COALESCE(SUM(amount),0) FROM payments "
+                      "WHERE verified=1 AND ts>=?", (start,))
+                  return float(cur.fetchone()[0] or 0)
+
+              def add_lesson(self, mid, kind, text):
+                  self.db.execute(
+                      "INSERT INTO lessons(mission_id,kind,text,ts) VALUES(?,?,?,?)",
+                      (mid, kind, text, time.time()))
+                  self.db.commit()
+
+              def add_chat(self, role, text):
+                  self.db.execute(
+                      "INSERT INTO chat_history(role,text,ts) VALUES(?,?,?)",
+                      (role, text, time.time()))
+                  self.db.commit()
+
+              def recent_chat(self, n=12):
+                  rows = self.db.execute(
+                      "SELECT role,text,ts FROM chat_history "
+                      "ORDER BY ts DESC LIMIT ?", (n,)).fetchall()
+                  rows.reverse()
+                  return [{"role": r[0], "text": r[1], "ts": r[2]} for r in rows]
+
+              def recent_context(self, n=5):
+                  missions = self.db.execute(
+                      "SELECT id,command,status,money_today FROM missions "
+                      "ORDER BY created DESC LIMIT ?", (n,)).fetchall()
+                  lessons = self.db.execute(
+                      "SELECT kind,text FROM lessons ORDER BY ts DESC LIMIT 10").fetchall()
+                  return {
+                      "recent_missions": [
+                          {"id": m[0], "command": m[1], "status": m[2],
+                           "money_today": m[3]} for m in missions],
+                      "lessons": [{"kind": l[0], "text": l[1]} for l in lessons],
+                      "money_today_total": self.money_today(),
+                  }
+
+              def kv_get(self, k, default=None):
+                  row = self.db.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
+                  return json.loads(row[0]) if row else default
+
+              def kv_set(self, k, v):
+                  self.db.execute("INSERT OR REPLACE INTO kv(k,v) VALUES(?,?)",
+                                  (k, json.dumps(v)))
+                  self.db.commit()
+          '''
+
+          # ============ boat/tools/__init__.py ============
+          files["boat/tools/__init__.py"] = '''"""Tool registry."""
+          import inspect
+          import os
+          import traceback
+
+          REGISTRY = {}
+
+
+          def tool(name, desc, params=None, danger="low"):
+              def deco(fn):
+                  REGISTRY[name] = {
+                      "name": name, "desc": desc, "fn": fn,
+                      "params": params or {"type": "object", "properties": {}},
+                      "danger": danger,
+                  }
+                  return fn
+              return deco
+
+
+          def tool_specs():
+              return [{"name": v["name"], "description": v["desc"],
+                       "parameters": v["params"]} for v in REGISTRY.values()]
+
+
+          async def call_tool(name, args):
+              if name not in REGISTRY:
+                  raise KeyError(f"unknown tool: {name}")
+              fn = REGISTRY[name]["fn"]
+              if inspect.iscoroutinefunction(fn):
+                  return await fn(**(args or {}))
+              return fn(**(args or {}))
+
+
+          def load_all():
+              print("[load_all] starting")
+              for name in ("shell_tool", "browser_tool", "phone_tool",
+                           "gmail_tool", "momo_tool", "github_tool",
+                           "social_tool", "telegram_tool"):
+                  try:
+                      __import__(f"boat.tools.{name}")
+                  except Exception as e:
+                      print(f"[load_all] FAIL core/{name}: {e}")
+                      traceback.print_exc()
+              for name in ("all_tools", "self_builder", "accounts_vault",
+                           "auto_heal", "ask_tool", "payments", "big_project"):
+                  try:
+                      __import__(f"boat.tools.{name}")
+                      print(f"[load_all] OK  {name}")
+                  except Exception as e:
+                      print(f"[load_all] FAIL {name}: {e}")
+                      traceback.print_exc()
+              auto_dir = os.path.join(os.path.dirname(__file__), "auto")
+              if os.path.isdir(auto_dir):
+                  for fname in os.listdir(auto_dir):
+                      if fname.endswith(".py") and not fname.startswith("_"):
+                          try:
+                              __import__(f"boat.tools.auto.{fname[:-3]}")
+                          except Exception as e:
+                              print(f"[load_all] FAIL auto/{fname}: {e}")
+              print(f"[load_all] done. REGISTRY has {len(REGISTRY)} tools")
+          '''
+
+          # ============ boat/tools/telegram_tool.py ============
+          files["boat/tools/telegram_tool.py"] = '''"""Telegram tools."""
+          import os
+          import httpx
+          from . import tool
+
+
+          @tool("telegram.send", "Send a Telegram message.",
+                {"type": "object", "properties": {
+                    "chat_id": {"type": "string"}, "text": {"type": "string"}},
+                 "required": ["chat_id", "text"]})
+          async def telegram_send(chat_id, text):
+              token = os.environ["TELEGRAM_BOT_TOKEN"]
+              async with httpx.AsyncClient(timeout=20) as c:
+                  r = await c.post(
+                      f"https://api.telegram.org/bot{token}/sendMessage",
+                      json={"chat_id": str(chat_id), "text": text[:4000]})
+                  return {"ok": r.status_code == 200, "body": r.text[:300]}
+
+
+          @tool("telegram.send_document", "Send a file to Telegram.",
+                {"type": "object", "properties": {
+                    "chat_id": {"type": "string"}, "path": {"type": "string"},
+                    "caption": {"type": "string", "default": ""}},
+                 "required": ["chat_id", "path"]})
+          async def telegram_send_document(chat_id, path, caption=""):
+              token = os.environ["TELEGRAM_BOT_TOKEN"]
+              async with httpx.AsyncClient(timeout=120) as c:
+                  with open(path, "rb") as f:
+                      r = await c.post(
+                          f"https://api.telegram.org/bot{token}/sendDocument",
+                          data={"chat_id": str(chat_id), "caption": caption},
+                          files={"document": f})
+                  return {"ok": r.status_code == 200, "body": r.text[:300]}
+          '''
+
+          # ============ boat/tools/github_tool.py ============
+          files["boat/tools/github_tool.py"] = '''"""GitHub tools."""
+          import base64
+          import os
+          import httpx
+          from . import tool
+
+          API = "https://api.github.com"
+
+
+          def _h():
+              return {"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+                      "Accept": "application/vnd.github+json"}
+
+
+          @tool("github.push_file", "Create or update a file in a GitHub repo.",
+                {"type": "object", "properties": {
+                    "repo": {"type": "string"}, "path": {"type": "string"},
+                    "content": {"type": "string"},
+                    "message": {"type": "string", "default": "boat: update"},
+                    "branch": {"type": "string", "default": "main"}},
+                 "required": ["repo", "path", "content"]})
+          async def github_push_file(repo, path, content,
+                                     message="boat: update", branch="main"):
+              async with httpx.AsyncClient(timeout=30, headers=_h()) as c:
+                  sha = None
+                  r = await c.get(f"{API}/repos/{repo}/contents/{path}",
+                                  params={"ref": branch})
+                  if r.status_code == 200:
+                      sha = r.json().get("sha")
+                  body = {"message": message, "branch": branch,
+                          "content": base64.b64encode(content.encode()).decode()}
+                  if sha:
+                      body["sha"] = sha
+                  r = await c.put(f"{API}/repos/{repo}/contents/{path}", json=body)
+                  return {"ok": r.status_code in (200, 201),
+                          "status": r.status_code, "body": r.text[:800]}
+
+
+          @tool("github.dispatch", "Trigger a GitHub Actions workflow.",
+                {"type": "object", "properties": {
+                    "repo": {"type": "string"}, "workflow": {"type": "string"},
+                    "ref": {"type": "string", "default": "main"},
+                    "inputs": {"type": "object"}},
+                 "required": ["repo", "workflow"]})
+          async def github_dispatch(repo, workflow, ref="main", inputs=None):
+              async with httpx.AsyncClient(timeout=30, headers=_h()) as c:
+                  r = await c.post(
+                      f"{API}/repos/{repo}/actions/workflows/{workflow}/dispatches",
+                      json={"ref": ref, "inputs": inputs or {}})
+                  return {"ok": r.status_code == 204, "status": r.status_code}
+          '''
+
+          # ============ boat/tools/shell_tool.py ============
+          files["boat/tools/shell_tool.py"] = '''"""Shell tool."""
+          import asyncio
+          import os
+          from . import tool
+
+
+          @tool("shell.run", "Run a shell command.",
+                {"type": "object", "properties": {
+                    "cmd": {"type": "string"}, "cwd": {"type": "string"},
+                    "timeout": {"type": "integer", "default": 120}},
+                 "required": ["cmd"]}, danger="high")
+          async def shell_run(cmd, cwd=None, timeout=120):
+              proc = await asyncio.create_subprocess_shell(
+                  cmd, cwd=cwd or os.getcwd(),
+                  stdout=asyncio.subprocess.PIPE,
+                  stderr=asyncio.subprocess.PIPE)
+              try:
+                  out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+              except asyncio.TimeoutError:
+                  proc.kill()
+                  return {"ok": False, "error": "timeout"}
+              return {"ok": proc.returncode == 0, "code": proc.returncode,
+                      "stdout": out.decode(errors="ignore")[:8000],
+                      "stderr": err.decode(errors="ignore")[:4000]}
+          '''
+
+          # ============ boat/tools/browser_tool.py ============
+          files["boat/tools/browser_tool.py"] = '''"""Browser tool."""
+          from . import tool
+
+
+          @tool("browser.open", "Open URL headless and return text.",
+                {"type": "object", "properties": {"url": {"type": "string"}},
+                 "required": ["url"]})
+          async def browser_open(url):
+              from playwright.async_api import async_playwright
+              async with async_playwright() as p:
+                  b = await p.chromium.launch(headless=True)
+                  pg = await b.new_page()
+                  await pg.goto(url, wait_until="domcontentloaded", timeout=45000)
+                  text = await pg.inner_text("body")
+                  await b.close()
+                  return {"url": url, "text": text[:8000]}
+          '''
+
+          # ============ boat/tools/social_tool.py ============
+          files["boat/tools/social_tool.py"] = '''"""Social tool."""
+          import os
+          import httpx
+          from . import tool
+
+
+          @tool("social.whatsapp_send", "Send WhatsApp via Twilio.",
+                {"type": "object", "properties": {
+                    "to": {"type": "string"}, "body": {"type": "string"}},
+                 "required": ["to", "body"]})
+          async def social_whatsapp_send(to, body):
+              sid = os.environ["TWILIO_SID"]
+              tok = os.environ["TWILIO_TOKEN"]
+              frm = os.environ["TWILIO_WA_FROM"]
+              async with httpx.AsyncClient(timeout=30) as c:
+                  r = await c.post(
+                      f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                      auth=(sid, tok),
+                      data={"From": f"whatsapp:{frm}",
+                            "To": f"whatsapp:{to}", "Body": body})
+                  return {"ok": r.status_code in (200, 201), "body": r.text[:400]}
+          '''
+
+          # ============ boat/tools/gmail_tool.py ============
+          files["boat/tools/gmail_tool.py"] = '''"""Gmail tool."""
+          import asyncio
+          import email
+          import imaplib
+          import os
+          import re
+          from . import tool
+
+
+          def _imap():
+              M = imaplib.IMAP4_SSL("imap.gmail.com")
+              M.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
+              M.select("INBOX")
+              return M
+
+
+          @tool("gmail.search", "Search Gmail (IMAP syntax).",
+                {"type": "object", "properties": {
+                    "query": {"type": "string", "default": "UNSEEN"},
+                    "limit": {"type": "integer", "default": 10}}})
+          async def gmail_search(query="UNSEEN", limit=10):
+              def _run():
+                  M = _imap()
+                  _, data = M.search(None, query)
+                  ids = data[0].split()[-limit:]
+                  out = []
+                  for i in ids:
+                      _, d = M.fetch(i, "(RFC822)")
+                      m = email.message_from_bytes(d[0][1])
+                      out.append({"from": m.get("From"),
+                                  "subject": m.get("Subject"),
+                                  "date": m.get("Date")})
+                  M.logout()
+                  return out
+              return await asyncio.to_thread(_run)
+          '''
+
+          # ============ boat/tools/momo_tool.py ============
+          files["boat/tools/momo_tool.py"] = '''"""MoMo tool."""
+          import os
+          import httpx
+          from . import tool
+
+
+          @tool("momo.recent", "List recent MoMo transactions.",
+                {"type": "object", "properties": {
+                    "limit": {"type": "integer", "default": 20}}})
+          async def momo_recent(limit=20):
+              base = os.environ.get("MOMO_BASE_URL")
+              sub = os.environ.get("MOMO_SUBSCRIPTION_KEY")
+              if not (base and sub):
+                  return {"ok": False, "reason": "MOMO_* secrets not set"}
+              async with httpx.AsyncClient(timeout=30) as c:
+                  r = await c.get(f"{base}/collection/v1_0/account/balance",
+                                  headers={"Ocp-Apim-Subscription-Key": sub})
+                  return {"ok": r.status_code == 200, "body": r.text[:2000]}
+          '''
+
+          # ============ boat/tools/phone_tool.py ============
+          files["boat/tools/phone_tool.py"] = '''"""Phone tool (adb)."""
+          import asyncio
+          from . import tool
+
+
+          async def _adb(*args):
+              p = await asyncio.create_subprocess_exec(
+                  "adb", *args,
+                  stdout=asyncio.subprocess.PIPE,
+                  stderr=asyncio.subprocess.PIPE)
+              out, err = await p.communicate()
+              return out.decode(errors="ignore"), err.decode(errors="ignore")
+
+
+          @tool("phone.sms", "Dump last N SMS messages.",
+                {"type": "object", "properties": {
+                    "limit": {"type": "integer", "default": 30}}})
+          async def phone_sms(limit=30):
+              out, err = await _adb("shell", "content", "query",
+                                    "--uri", "content://sms/inbox",
+                                    "--projection", "address:body:date")
+              msgs = [dict(p.split("=", 1) for p in line.split(",") if "=" in p)
+                      for line in out.splitlines() if "body=" in line]
+              return {"count": len(msgs), "messages": msgs[-limit:]}
+          '''
+
+          # ============ boat/tools/ask_tool.py ============
+          files["boat/tools/ask_tool.py"] = '''"""Ask tool."""
+          import time
+          from . import tool
+
+
+          @tool("telegram.ask", "Ask the user a question on Telegram.",
+                {"type": "object", "properties": {
+                    "chat_id": {"type": "string"},
+                    "question": {"type": "string"},
+                    "mission_id": {"type": "string"}},
+                 "required": ["chat_id", "question"]})
+          async def ask(chat_id, question, mission_id="", **_i):
+              from .telegram_tool import telegram_send
+              r = await telegram_send(chat_id=str(chat_id), text=f"❓ {question}")
+              return {"ok": r.get("ok", False), "awaiting_input": True,
+                      "mission_id": mission_id, "asked_at": time.time()}
+          '''
+
+          # ============ boat/tools/payments.py ============
+          files["boat/tools/payments.py"] = '''"""Payment tracking."""
+          import os
+          import time
+          from . import tool
+
+
+          @tool("payments.owner_confirm", "Owner confirms a payment.",
+                {"type": "object", "properties": {"client": {"type": "string"}},
+                 "required": ["client"]})
+          async def owner_confirm(client, **_i):
+              from ..memory import Memory
+              m = Memory()
+              m.db.execute("""CREATE TABLE IF NOT EXISTS pending_payments(
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  client TEXT, amount REAL, currency TEXT, ref TEXT,
+                  raw TEXT, mission_id TEXT, status TEXT, created REAL)""")
+              row = m.db.execute(
+                  "SELECT id, amount, currency, ref, mission_id FROM pending_payments "
+                  "WHERE client=? AND status='awaiting_owner' "
+                  "ORDER BY created DESC LIMIT 1", (client,)).fetchone()
+              if not row:
+                  return {"ok": False, "reason": f"no pending payment for {client}"}
+              pid, amount, currency, ref, mission = row
+              m.db.execute("UPDATE pending_payments SET status='confirmed' WHERE id=?", (pid,))
+              m.record_payment(mission or "", "customer_verified", amount, currency,
+                               ref=ref or "", verified=1)
+              m.db.commit()
+              return {"ok": True, "client": client, "amount": amount}
+
+
+          @tool("payments.owner_reject", "Owner rejects a payment.",
+                {"type": "object", "properties": {"client": {"type": "string"}},
+                 "required": ["client"]})
+          async def owner_reject(client, **_i):
+              from ..memory import Memory
+              m = Memory()
+              m.db.execute("""CREATE TABLE IF NOT EXISTS pending_payments(
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  client TEXT, amount REAL, currency TEXT, ref TEXT,
+                  raw TEXT, mission_id TEXT, status TEXT, created REAL)""")
+              m.db.execute("UPDATE pending_payments SET status='rejected' "
+                           "WHERE client=? AND status='awaiting_owner'", (client,))
+              m.db.commit()
+              return {"ok": True, "client": client, "note": "will be chased"}
+          '''
+
+          # ============ boat/tools/auto_heal.py ============
+          files["boat/tools/auto_heal.py"] = '''"""Universal self-healer."""
+          import json
+          import re
+          from . import tool, call_tool
+
+
+          @tool("self.auto_heal", "Universal self-healer for failed steps.",
+                {"type": "object", "properties": {
+                    "failed_step": {"type": "object"},
+                    "error": {"type": "string"},
+                    "mission_context": {"type": "object"}},
+                 "required": ["failed_step", "error"]}, danger="medium")
+          async def auto_heal(failed_step, error, mission_context=None, **_i):
+              e = (error or "").lower()
+              tool_name = (failed_step or {}).get("tool", "")
+              args = (failed_step or {}).get("args", {})
+
+              if "unknown tool" in e or "keyerror" in e:
+                  m = re.search(r"unknown tool:\\s*([a-z0-9_.]+)", error or "", re.I)
+                  missing = m.group(1) if m else tool_name
+                  try:
+                      await call_tool("self.write_tool", {
+                          "tool_name": missing,
+                          "purpose": f"tool {missing} called with {json.dumps(args)}",
+                          "example_args": args})
+                      return {"healed": True, "kind": "unknown_tool"}
+                  except Exception as ex:
+                      return {"healed": False, "error": str(ex)}
+
+              if "429" in e or "rate" in e or "busy" in e:
+                  import asyncio
+                  await asyncio.sleep(15)
+                  return {"healed": True, "kind": "rate_limit",
+                          "next_steps": [{"tool": tool_name, "args": args,
+                                          "why": "retry after wait"}]}
+
+              if "no such file" in e or "not found" in e or "404" in e:
+                  t = (tool_name or "").lower()
+                  if "build" in t or "apk" in t:
+                      slug = args.get("app_slug", "app")
+                      spec = (mission_context or {}).get("command", "build the app")
+                      return {"healed": True, "kind": "missing_file",
+                              "next_steps": [
+                                  {"tool": "code.write_flutter_app",
+                                   "args": {"spec": spec, "app_slug": slug}},
+                                  {"tool": "code.build_apk",
+                                   "args": {"app_slug": slug, "spec": spec}}]}
+
+              return {"healed": False, "error": error[:300]}
+          '''
+
+          # ============ boat/tools/self_builder.py ============
+          files["boat/tools/self_builder.py"] = '''"""Self-builder."""
+          import json
+          import os
+          import re
+          import httpx
+          from . import tool
+
+
+          async def _llm(prompt, max_tokens=6000):
+              base = os.environ.get("BOAT_LLM_BASE", "https://api.groq.com/openai/v1")
+              key = os.environ["BOAT_LLM_KEY"]
+              model = os.environ.get("BOAT_LLM_MODEL", "llama-3.3-70b-versatile")
+              async with httpx.AsyncClient(timeout=120) as c:
+                  r = await c.post(f"{base}/chat/completions",
+                      headers={"Authorization": f"Bearer {key}"},
+                      json={"model": model,
+                            "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 0.2, "max_tokens": max_tokens})
+                  r.raise_for_status()
+                  return r.json()["choices"][0]["message"]["content"]
+
+
+          @tool("self.write_tool", "BOAT writes a new tool for itself.",
+                {"type": "object", "properties": {
+                    "tool_name": {"type": "string"},
+                    "purpose": {"type": "string"},
+                    "example_args": {"type": "object"}},
+                 "required": ["tool_name", "purpose"]}, danger="high")
+          async def write_tool(tool_name, purpose, example_args=None, **_i):
+              safe = re.sub(r"[^a-z0-9_]", "_", tool_name.lower().replace(".", "_"))
+              path = f"boat/tools/auto/{safe}.py"
+              code = await _llm(
+                  f"Write a Python tool for BOAT.\\n"
+                  f"Tool name: {tool_name}\\nPurpose: {purpose}\\n\\n"
+                  f"Return ONLY Python code for boat/tools/auto/{safe}.py. "
+                  f"Import from .. import tool. Return dict with 'ok' key.", 4000)
+              code = re.sub(r"^```[a-z]*\\n?", "", code)
+              code = re.sub(r"\\n?```$", "", code)
+              from .github_tool import github_push_file
+              repo = os.environ["GITHUB_REPOSITORY"]
+              r = await github_push_file(repo=repo, path=path, content=code,
+                                         message=f"boat: self-build {tool_name}")
+              return {"ok": r.get("ok"), "tool_name": tool_name, "path": path}
+          '''
+
+          # ============ boat/tools/accounts_vault.py ============
+          files["boat/tools/accounts_vault.py"] = '''"""Accounts vault."""
+          import json
+          import time
+          from . import tool
+
+
+          @tool("vault.save_account", "Store credentials for a service.",
+                {"type": "object", "properties": {
+                    "service": {"type": "string"}, "kind": {"type": "string"},
+                    "username": {"type": "string"}, "password": {"type": "string"},
+                    "extra": {"type": "object"}, "notes": {"type": "string"}},
+                 "required": ["service"]}, danger="high")
+          async def save_account(service, kind="generic", username="",
+                                 password="", extra=None, notes="", **_i):
+              from ..memory import Memory
+              m = Memory()
+              now = time.time()
+              m.db.execute(
+                  "INSERT OR REPLACE INTO vault(service,kind,username,password,"
+                  "extra,notes,created,last_used) "
+                  "VALUES(?,?,?,?,?,?,COALESCE((SELECT created FROM vault WHERE service=?),?),?)",
+                  (service, kind, username, password, json.dumps(extra or {}),
+                   notes, service, now, now))
+              m.db.commit()
+              return {"ok": True, "service": service}
+
+
+          @tool("vault.get_account", "Retrieve stored credentials.",
+                {"type": "object", "properties": {"service": {"type": "string"}},
+                 "required": ["service"]}, danger="high")
+          async def get_account(service, **_i):
+              from ..memory import Memory
+              m = Memory()
+              row = m.db.execute(
+                  "SELECT kind,username,password,extra,notes FROM vault "
+                  "WHERE service=?", (service,)).fetchone()
+              if not row:
+                  return {"ok": False, "reason": f"no account for {service}"}
+              m.db.execute("UPDATE vault SET last_used=? WHERE service=?",
+                           (time.time(), service))
+              m.db.commit()
+              try:
+                  extra_obj = json.loads(row[3] or "{}")
+              except Exception:
+                  extra_obj = {}
+              return {"ok": True, "service": service, "kind": row[0],
+                      "username": row[1], "password": row[2],
+                      "extra": extra_obj, "notes": row[4]}
+          '''
+
+          # ============ boat/tools/big_project.py ============
+          files["boat/tools/big_project.py"] = '''"""Big project tracker."""
+          import json
+          import os
+          import re
+          import time
+          import uuid
+          import httpx
+          from . import tool
+
+
+          async def _llm(prompt, max_tokens=4000):
+              base = os.environ.get("BOAT_LLM_BASE", "https://api.groq.com/openai/v1")
+              key = os.environ["BOAT_LLM_KEY"]
+              model = os.environ.get("BOAT_LLM_MODEL", "llama-3.3-70b-versatile")
+              async with httpx.AsyncClient(timeout=180) as c:
+                  r = await c.post(f"{base}/chat/completions",
+                      headers={"Authorization": f"Bearer {key}"},
+                      json={"model": model,
+                            "messages": [{"role": "user", "content": prompt}],
+                            "temperature": 0.2, "max_tokens": max_tokens})
+                  r.raise_for_status()
+                  return r.json()["choices"][0]["message"]["content"]
+
+
+          def _json(s):
+              if not s: return {}
+              s = s.strip()
+              s = re.sub(r"^```(?:json)?\\s*", "", s)
+              s = re.sub(r"\\s*```$", "", s)
+              try: return json.loads(s)
+              except Exception:
+                  m = re.search(r"\\{.*\\}", s, re.S)
+                  if not m: return {}
+                  try: return json.loads(m.group(0))
+                  except Exception: return {}
+
+
+          def _db():
+              from ..memory import Memory
+              m = Memory()
+              m.db.executescript("""CREATE TABLE IF NOT EXISTS big_projects(
+                  id TEXT PRIMARY KEY, title TEXT, goal TEXT, platform TEXT,
+                  total_sprints INTEGER, done_sprints INTEGER,
+                  current_sprint INTEGER, sprint_list TEXT, status TEXT,
+                  slug TEXT, created REAL, updated REAL);""")
+              m.db.commit()
+              return m
+
+
+          def _slugify(s):
+              s = (s or "bigproj").lower().strip()
+              s = re.sub(r"[^a-z0-9]+", "_", s)
+              return s.strip("_")[:40] or "bigproj"
+
+
+          @tool("big.start", "Start a BIG project split into sprints.",
+                {"type": "object", "properties": {
+                    "title": {"type": "string"}, "goal": {"type": "string"},
+                    "platform": {"type": "string"},
+                    "max_sprints": {"type": "integer", "default": 20}},
+                 "required": ["title", "goal"]}, danger="high")
+          async def start(title, goal, platform="android", max_sprints=20, **_i):
+              slug = _slugify(title)
+              raw = await _llm(
+                  f"Break this into {max_sprints} sprints.\\n"
+                  f"Project: {title}\\nGoal: {goal}\\nPlatform: {platform}\\n"
+                  f'Return ONLY JSON: {{"sprints":[{{"n":1,"title":"..","deliverable":".."}}]}}')
+              data = _json(raw)
+              sprints = data.get("sprints") or []
+              if not sprints:
+                  return {"ok": False, "error": "no sprints"}
+              m = _db()
+              pid = uuid.uuid4().hex[:8]
+              now = time.time()
+              m.db.execute(
+                  "INSERT INTO big_projects(id,title,goal,platform,total_sprints,"
+                  "done_sprints,current_sprint,sprint_list,status,slug,created,updated) "
+                  "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (pid, title, goal, platform, len(sprints), 0, 1,
+                   json.dumps(sprints), "active", slug, now, now))
+              m.db.commit()
+              return {"ok": True, "project_id": pid, "sprint_count": len(sprints),
+                      "first_sprint": sprints[0]}
+
+
+          @tool("big.next", "Run the next sprint of a big project.",
+                {"type": "object", "properties": {"project_id": {"type": "string"}}},
+                danger="high")
+          async def next_sprint(project_id=None, **_i):
+              m = _db()
+              if project_id:
+                  row = m.db.execute(
+                      "SELECT id,title,goal,platform,total_sprints,done_sprints,"
+                      "current_sprint,sprint_list,slug FROM big_projects WHERE id=?",
+                      (project_id,)).fetchone()
+              else:
+                  row = m.db.execute(
+                      "SELECT id,title,goal,platform,total_sprints,done_sprints,"
+                      "current_sprint,sprint_list,slug FROM big_projects "
+                      "WHERE status='active' ORDER BY updated DESC LIMIT 1").fetchone()
+              if not row:
+                  return {"ok": False, "reason": "no active project"}
+              (pid, title, goal, platform, total, done_count, cur, sprint_list, slug) = row
+              sprints = json.loads(sprint_list or "[]")
+              if cur > total:
+                  m.db.execute("UPDATE big_projects SET status='done',updated=? WHERE id=?",
+                               (time.time(), pid))
+                  m.db.commit()
+                  return {"ok": True, "status": "done"}
+              this_sprint = sprints[cur - 1] if cur <= len(sprints) else None
+              if not this_sprint:
+                  return {"ok": False, "reason": "no more sprints"}
+              from . import call_tool
+              spec = (f"Sprint {cur} of {total} for '{title}'.\\n"
+                      f"Goal: {goal}\\nSprint: {this_sprint.get('title')}\\n"
+                      f"Deliverable: {this_sprint.get('deliverable')}\\n\\n"
+                      f"Write FULL main.dart including sprints 1 through {cur}.")
+              try:
+                  wr = await call_tool("code.write_flutter_app",
+                                       {"spec": spec, "app_slug": slug})
+              except Exception as e:
+                  return {"ok": False, "error": str(e)}
+              m.db.execute("UPDATE big_projects SET done_sprints=?,"
+                           "current_sprint=?,updated=? WHERE id=?",
+                           (done_count + 1, cur + 1, time.time(), pid))
+              m.db.commit()
+              return {"ok": True, "sprint_completed": cur,
+                      "sprint_title": this_sprint.get("title"),
+                      "next_sprint": cur + 1}
+          '''
+
+          # Write all files
+          import os
+          for path, content in files.items():
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              with open(path, "w") as f:
+                  f.write(content)
+              print(f"wrote {path}")
+
+          print(f"\\nTotal: {len(files)} files written")
+          PYTHON_INSTALLER
+
+      - name: Write requirements.txt
+        run: |
+          cat > requirements.txt <<'EOF'
+          httpx>=0.27
+          playwright>=1.44
+          EOF
+
+      - name: Commit
+        run: |
+          git config user.name  "boat-bot"
+          git config user.email "boat@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "boat: install all files"
+            git push
+          fi
