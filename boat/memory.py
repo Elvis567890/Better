@@ -4,6 +4,7 @@ import os
 import sqlite3
 import time
 
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS missions(
   id TEXT PRIMARY KEY, command TEXT, source TEXT, status TEXT,
@@ -13,6 +14,10 @@ CREATE TABLE IF NOT EXISTS payments(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mission_id TEXT, source TEXT, amount REAL, currency TEXT,
   ref TEXT, verified INTEGER DEFAULT 0, ts REAL);
+CREATE TABLE IF NOT EXISTS opportunities(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT, url TEXT, pays_today INTEGER, cost REAL,
+  eta_hours REAL, notes TEXT, ts REAL);
 CREATE TABLE IF NOT EXISTS lessons(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mission_id TEXT, kind TEXT, text TEXT, ts REAL);
@@ -30,6 +35,10 @@ CREATE TABLE IF NOT EXISTS projects(
   id TEXT PRIMARY KEY, title TEXT, goal TEXT, status TEXT,
   stage TEXT, plan TEXT, done TEXT, blocked TEXT, notes TEXT,
   created REAL, updated REAL);
+CREATE TABLE IF NOT EXISTS leads(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT, contact TEXT, channel TEXT, region TEXT, pitch TEXT,
+  status TEXT, created REAL, updated REAL);
 CREATE TABLE IF NOT EXISTS big_projects(
   id TEXT PRIMARY KEY, title TEXT, goal TEXT, platform TEXT,
   total_sprints INTEGER, done_sprints INTEGER,
@@ -81,6 +90,13 @@ class Memory:
         self.db.execute(
             "INSERT INTO lessons(mission_id,kind,text,ts) VALUES(?,?,?,?)",
             (mid, kind, text, time.time()))
+        self.db.commit()
+
+    def add_opportunity(self, title, url, pays_today, cost, eta_hours, notes=""):
+        self.db.execute(
+            "INSERT INTO opportunities(title,url,pays_today,cost,eta_hours,"
+            "notes,ts) VALUES(?,?,?,?,?,?,?)",
+            (title, url, int(pays_today), cost, eta_hours, notes, time.time()))
         self.db.commit()
 
     def add_chat(self, role, text):
