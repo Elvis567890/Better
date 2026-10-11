@@ -1,13 +1,20 @@
-document.getElementById('contactForm').addEventListener('submit', function(e){
+document.getElementById('calcForm').addEventListener('submit',function(e){
   e.preventDefault();
-  const name = this.name.value.trim();
-  const email = this.email.value.trim();
-  const message = this.message.value.trim();
-  const subject = encodeURIComponent('Quick Remote Income Inquiry from ' + name);
-  const body = encodeURIComponent('Name: ' + name + '\\nEmail: ' + email + '\\n\\nMessage:\\n' + message);
-  const mailtoLink = `mailto:contact@quickremoteincome.com?subject=${subject}&body=${body}`;
-  window.location.href = mailtoLink;
-  const msgEl = document.getElementById('formMessage');
-  msgEl.textContent = 'Opening your email client...';
-  msgEl.classList.remove('hidden');
+  var h=parseFloat(document.getElementById('hours').value)||0;
+  var r=parseFloat(document.getElementById('rate').value)||0;
+  var monthly=h*r*30;
+  document.getElementById('result').textContent='Estimated monthly earnings: $'+monthly.toFixed(2);
+});
+
+document.getElementById('contactForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var name=document.getElementById('name').value.trim();
+  var email=document.getElementById('email').value.trim();
+  var msg=document.getElementById('msg');
+  if(name && email){
+    msg.textContent='Thank you, '+name+'! We will contact you at '+email+'.';
+    document.getElementById('contactForm').reset();
+  }else{
+    msg.textContent='Please fill in all fields.';
+  }
 });
