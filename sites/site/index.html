@@ -1,78 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Make Money Today - Self-Drive</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Productivity Timer Pro</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <h1>Make Money Today</h1>
-  <nav>
-    <a href="#features">Features</a>
-    <a href="#calculator">Earnings Calculator</a>
-    <a href="#contact">Contact</a>
-  </nav>
-</header>
+  <div class="container">
+    <h1>Productivity Timer Pro</h1>
+    <p>Download the best free timer app for developers.</p>
 
-<section class="hero">
-  <h2>Earn Income with Your Own Self-Drive Car</h2>
-  <p>Turn idle time into cash. List your vehicle, set your price, and start earning today.</p>
-  <a href="#contact" class="btn">Get Started</a>
-</section>
+    <div class="timer">
+      <div id="display">00:00</div>
+      <div class="controls">
+        <input type="number" id="minutes" placeholder="Minutes" min="0">
+        <button id="startBtn">Start</button>
+        <button id="pauseBtn" disabled>Pause</button>
+        <button id="resetBtn" disabled>Reset</button>
+      </div>
+    </div>
 
-<section id="features" class="features">
-  <h3>How It Works</h3>
-  <div class="grid">
-    <div class="card">
-      <h4>List Your Car</h4>
-      <p>Upload photos and set availability.</p>
-    </div>
-    <div class="card">
-      <h4>Set Your Rate</h4>
-      <p>Choose hourly or daily rates.</p>
-    </div>
-    <div class="card">
-      <h4>Earn Automatically</h4>
-      <p>Payments are transferred to your account.</p>
-    </div>
+    <a href="#" class="download-btn">Download Now</a>
   </div>
-</section>
 
-<section id="calculator" class="calculator">
-  <h3>Earnings Calculator</h3>
-  <p>Estimate your monthly earnings.</p>
-  <form id="calcForm">
-    <label>Daily Rental Hours:
-      <input type="number" id="hours" min="0" max="24" value="4" required>
-    </label>
-    <label>Rate per Hour ($):
-      <input type="number" id="rate" min="0" step="0.01" value="15" required>
-    </label>
-    <button type="submit">Calculate</button>
-  </form>
-  <p id="result"></p>
-</section>
-
-<section id="contact" class="contact">
-  <h3>Join Now</h3>
-  <form id="contactForm">
-    <label>Name:
-      <input type="text" id="name" required>
-    </label>
-    <label>Email:
-      <input type="email" id="email" required>
-    </label>
-    <button type="submit">Sign Up</button>
-  </form>
-  <p id="msg"></p>
-</section>
-
-<footer>
-  <p>&copy; 2026 Make Money Today. All rights reserved.</p>
-</footer>
-
-<script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
