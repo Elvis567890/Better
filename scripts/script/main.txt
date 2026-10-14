@@ -1,0 +1,163 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Acme Landing – Your Solution Starts Here</title>
+    <meta name="description" content="Acme Landing is a responsive one‑page site with hero, features, contact form and Stripe payment integration.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Open Graph / SEO -->
+    <meta property="og:title" content="Acme Landing – Your Solution Starts Here">
+    <meta property="og:description" content="Responsive landing page with features, contact form and Stripe checkout.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://example.com/">
+    <meta property="og:image" content="https://example.com/og-image.jpg">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* ==== Basic Reset ==== */
+        *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+        body {font-family:Arial,Helvetica,sans-serif; line-height:1.6; color:#333; background:#f9f9f9;}
+        a {color:inherit; text-decoration:none;}
+        img {max-width:100%; height:auto; display:block;}
+
+        /* ==== Layout ==== */
+        header, .hero, .features, .contact, footer {padding:2rem 1rem; max-width:1200px; margin:auto;}
+        .hero {background:#4a90e2; color:#fff; text-align:center; padding:4rem 1rem;}
+        .hero h1 {font-size:2.5rem; margin-bottom:.5rem;}
+        .hero p {font-size:1.2rem; margin-bottom:1.5rem;}
+        .btn {display:inline-block; padding:.75rem 1.5rem; background:#ff5a5f; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:1rem;}
+        .btn:hover {background:#e04e52;}
+
+        .features {display:flex; flex-wrap:wrap; gap:1.5rem; justify-content:center;}
+        .feature {background:#fff; padding:1.5rem; border-radius:8px; flex:1 1 250px; box-shadow:0 2px 6px rgba(0,0,0,.1);}
+        .feature h3 {margin-bottom:.5rem; color:#4a90e2;}
+
+        .contact form {background:#fff; padding:2rem; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.1);}
+        .form-group {margin-bottom:1rem;}
+        .form-group label {display:block; margin-bottom:.3rem;}
+        .form-group input {width:100%; padding:.5rem; border:1px solid #ccc; border-radius:4px;}
+        .thanks {text-align:center; margin-top:2rem; font-size:1.2rem; color:#4a90e2;}
+
+        footer {text-align:center; font-size:.9rem; color:#777; margin-top:2rem;}
+
+        /* ==== Responsive ==== */
+        @media (max-width:768px){
+            .hero h1{font-size:2rem;}
+            .features{flex-direction:column; align-items:stretch;}
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <nav>
+        <a href="#hero">Home</a> |
+        <a href="#features">Features</a> |
+        <a href="#contact">Contact</a>
+    </nav>
+</header>
+
+<section id="hero" class="hero">
+    <h1>Welcome to Acme Landing</h1>
+    <p>Your solution starts here. Discover our features and get started today.</p>
+    <button id="checkout-button" class="btn">Buy Now – $19.99</button>
+</section>
+
+<section id="features" class="features">
+    <div class="feature">
+        <h3>Fast Performance</h3>
+        <p>Lightning‑fast loading times and smooth interactions.</p>
+    </div>
+    <div class="feature">
+        <h3>Responsive Design</h3>
+        <p>Looks great on any device, from phones to desktops.</p>
+    </div>
+    <div class="feature">
+        <h3>Secure Payments</h3>
+        <p>Integrated Stripe Checkout for safe transactions.</p>
+    </div>
+</section>
+
+<section id="contact" class="contact">
+    <h2>Contact Us</h2>
+    <form id="contact-form">
+        <div class="form-group">
+            <label for="email">Email address</label>
+            <input type="email" id="email" name="email" required placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+            <label for="phone">Phone number</label>
+            <input type="tel" id="phone" name="phone" required placeholder="+1 555 123 4567">
+        </div>
+        <button type="submit" class="btn">Send Message</button>
+    </form>
+    <div id="form-message" class="thanks" style="display:none;">Thank you! We’ll be in touch soon.</div>
+</section>
+
+<footer>
+    © 2026 Acme Landing. All rights reserved.
+</footer>
+
+<!-- Stripe.js -->
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    // ==== Stripe Checkout ====
+    const stripe = Stripe('pk_test_XXXXXXXXXXXXXXXXXXXXXXXX'); // <-- replace with your publishable key
+    const checkoutButton = document.getElementById('checkout-button');
+
+    checkoutButton.addEventListener('click', () => {
+        // Replace with your actual price ID from Stripe Dashboard
+        stripe.redirectToCheckout({
+            lineItems: [{price: 'price_1Hh1XYZabc123def456ghi', quantity: 1}],
+            mode: 'payment',
+            successUrl: window.location.origin + '/thankyou.html',
+            cancelUrl: window.location.origin + '/index.html',
+        })
+        .then(function (result) {
+            if (result.error) {
+                alert(result.error.message);
+            }
+        });
+    });
+
+    // ==== Contact Form (client‑side only) ====
+    const form = document.getElementById('contact-form');
+    const messageDiv = document.getElementById('form-message');
+
+    form.addEventListener('submit', e => {
+        e.preventDefault();
+        // In a real project you would POST to a backend endpoint.
+        // Here we just simulate a successful submission.
+        form.reset();
+        messageDiv.style.display = 'block';
+        setTimeout(() => { messageDiv.style.display = 'none'; }, 5000);
+    });
+</script>
+</body>
+</html>
+
+<!-- thankyou.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Thank You – Acme Landing</title>
+    <meta name="description" content="Thank you for your purchase!">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body{font-family:Arial,Helvetica,sans-serif;background:#f9f9f9;color:#333;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}
+        .container{background:#fff;padding:2rem 3rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;}
+        .container h1{color:#4a90e2;margin-bottom:.5rem;}
+        .container p{margin-bottom:1.5rem;}
+        .btn{display:inline-block;padding:.75rem 1.5rem;background:#ff5a5f;color:#fff;border:none;border-radius:4px;cursor:pointer;}
+        .btn:hover{background:#e04e52;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Thank You!</h1>
+        <p>Your payment was successful. A receipt has been sent to your email.</p>
+        <a href="index.html" class="btn">Back to Home</a>
+    </div>
+</body>
+</html>
