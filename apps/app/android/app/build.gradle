@@ -3,6 +3,7 @@ plugins {
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
 }
+
 android {
     namespace = "com.boat.app"
     compileSdk = 34
@@ -11,7 +12,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
     defaultConfig {
         applicationId = "com.boat.app"
         minSdk = 21
@@ -25,4 +28,5 @@ android {
         }
     }
 }
+
 flutter { source = "../.." }
