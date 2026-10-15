@@ -1,86 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyService - Business</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick Freelance Services</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header>
-        <h1>MyService</h1>
-        <nav>
-            <a href="#portfolio">Portfolio</a>
-            <a href="#contact">Contact</a>
-            <a href="#payment">Buy</a>
-        </nav>
-    </header>
+  <header>
+    <div class="container">
+      <h1>Quick Freelance Services</h1>
+      <nav>
+        <ul>
+          <li><a href="#home">Home</a></li>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
 
-    <main>
-        <section id="hero">
-            <h2>Welcome to MyService</h2>
-            <p>Professional solutions for your business.</p>
-        </section>
+  <section id="home" class="section">
+    <div class="container">
+      <h2>Welcome</h2>
+      <p>Professional freelance solutions tailored to your needs.</p>
+    </div>
+  </section>
 
-        <section id="portfolio">
-            <h2>Portfolio</h2>
-            <div class="grid">
-                <div class="item">
-                    <img src="https://via.placeholder.com/300x200" alt="Project 1">
-                    <h3>Project 1</h3>
-                </div>
-                <div class="item">
-                    <img src="https://via.placeholder.com/300x200" alt="Project 2">
-                    <h3>Project 2</h3>
-                </div>
-                <div class="item">
-                    <img src="https://via.placeholder.com/300x200" alt="Project 3">
-                    <h3>Project 3</h3>
-                </div>
-                <div class="item">
-                    <img src="https://via.placeholder.com/300x200" alt="Project 4">
-                    <h3>Project 4</h3>
-                </div>
-            </div>
-        </section>
+  <section id="services" class="section">
+    <div class="container">
+      <h2>Our Services</h2>
+      <div class="services-grid">
+        <div class="service-item">
+          <h3>Web Development</h3>
+          <p>Responsive websites, e‑commerce, and more.</p>
+        </div>
+        <div class="service-item">
+          <h3>Graphic Design</h3>
+          <p>Logos, branding, and visual assets.</p>
+        </div>
+        <div class="service-item">
+          <h3>Content Writing</h3>
+          <p>SEO‑friendly articles, blogs, and copy.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-        <section id="contact">
-            <h2>Contact Us</h2>
-            <form id="contactForm">
-                <label>
-                    Name
-                    <input type="text" name="name" required>
-                </label>
-                <label>
-                    Email
-                    <input type="email" name="email" required>
-                </label>
-                <label>
-                    Message
-                    <textarea name="message" rows="4" required></textarea>
-                </label>
-                <button type="submit">Send</button>
-                <div id="contactMsg" class="msg"></div>
-            </form>
-        </section>
+  <section id="contact" class="section">
+    <div class="container">
+      <h2>Contact Us</h2>
+      <form id="contactForm">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required>
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required>
+        <label for="message">Message</label>
+        <textarea id="message" name="message" rows="4" required></textarea>
+        <button type="submit">Send Message</button>
+        <p id="formMessage" class="form-message"></p>
+      </form>
+    </div>
+  </section>
 
-        <section id="payment">
-            <h2>Buy Our Service</h2>
-            <form id="paymentForm">
-                <label>
-                    Amount (USD)
-                    <input type="number" name="amount" min="1" value="10" required>
-                </label>
-                <button type="submit">Pay Now</button>
-                <div id="paymentMsg" class="msg"></div>
-            </form>
-        </section>
-    </main>
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Quick Freelance Services. All rights reserved.</p>
+    </div>
+  </footer>
 
-    <footer>
-        <p>&copy; 2026 MyService</p>
-    </footer>
-
-    <script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
