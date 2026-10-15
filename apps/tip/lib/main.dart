@@ -26,19 +26,22 @@ class TipCalculatorPage extends StatefulWidget {
 
 class _TipCalculatorPageState extends State<TipCalculatorPage> {
   final TextEditingController _billController = TextEditingController();
-  double _tipPercent = 15;
-  int _people = 1;
-
-  double get _bill => double.tryParse(_billController.text) ?? 0.0;
-  double get _tipAmount => _bill * _tipPercent / 100;
-  double get _total => _bill + _tipAmount;
-  double get _perPerson => _people > 0 ? _total / _people : 0.0;
+  final TextEditingController _peopleController = TextEditingController(text: '1');
+  double _tipPercent = 15.0;
 
   @override
   void dispose() {
     _billController.dispose();
+    _peopleController.dispose();
     super.dispose();
   }
+
+  double get _bill => double.tryParse(_billController.text) ?? 0.0;
+  int get _people => int.tryParse(_peopleController.text) ?? 1;
+
+  double get _tipAmount => _bill * _tipPercent / 100.0;
+  double get _total => _bill + _tipAmount;
+  double get _perPerson => _people > 0 ? _total / _people : 0.0;
 
   @override
   Widget build(BuildContext context) {
@@ -78,29 +81,36 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
                     },
                   ),
                 ),
-                SizedBox(width: 48, child: Text('${_tipPercent.round()}%')),
+                Text('${_tipPercent.round()}%'),
               ],
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('People'),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.remove),
-                  onPressed: _people > 1 ? () => setState(() => _people--) : null,
-                ),
-                Text('$_people'),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () => setState(() => _people++),
-                ),
-              ],
+            TextField(
+              controller: _peopleController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Number of People',
+                prefixIcon: Icon(Icons.person),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
             ),
-            const Divider(height: 32),
-            _buildResultRow('Tip Amount', _tipAmount),
-            _buildResultRow('Total', _total),
-            _buildResultRow('Per Person', _perPerson),
+            const SizedBox(height: 24),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    _buildResultRow('Bill', _bill),
+                    _buildResultRow('Tip (${_tipPercent.round()}%)', _tipAmount),
+                    const Divider(),
+                    _buildResultRow('Total', _total),
+                    const Divider(),
+                    _buildResultRow('Per Person', _perPerson),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -108,15 +118,12 @@ class _TipCalculatorPageState extends State<TipCalculatorPage> {
   }
 
   Widget _buildResultRow(String label, double value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Text(label),
-          const Spacer(),
-          Text('\$${value.toStringAsFixed(2)}'),
-        ],
-      ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label),
+        Text('\$${value.toStringAsFixed(2)}'),
+      ],
     );
   }
 }
