@@ -10,10 +10,7 @@ try:
 except Exception:
     Memory = None
 
-
-SYSTEM = """You are BOAT - an autonomous worker.
-Reply with a single valid JSON object. No prose outside the JSON."""
-
+SYSTEM = "You are BOAT. Reply with a single valid JSON object only."
 
 PROVIDERS = [
     {"name": "groq", "prefix": "gsk_",
@@ -27,7 +24,6 @@ PROVIDERS = [
      "base": "https://openrouter.ai/api/v1",
      "preferred": [], "free_only": True},
 ]
-
 
 EXECUTE_TRIGGERS = (
     "build ", "make ", "create ", "generate ", "design ", "write ",
@@ -44,14 +40,14 @@ class Planner:
     def __init__(self, base=None, key=None, model=None):
         keys = []
         for env in ("BOAT_LLM_KEY", "GROQ_KEY", "CEREBRAS_KEY",
-                    "OPENROUTER_KEY", "AIMLAPI_KEY"):
+                    "OPENROUTER_KEY"):
             k = os.environ.get(env)
             if k:
                 keys.append(k.strip())
         if key:
             keys.insert(0, key.strip())
         if not keys:
-            raise RuntimeError("No LLM key found. Set BOAT_LLM_KEY.")
+            raise RuntimeError("No LLM key found.")
 
         self.chain = []
         seen = set()
@@ -61,9 +57,6 @@ class Planner:
                 continue
             seen.add(p["base"])
             self.chain.append({**p, "key": k, "models": None})
-
-        if not self.chain:
-            raise RuntimeError("Unrecognized key prefix.")
 
         self._memo = Memory() if Memory else None
         self._winner = None
@@ -85,7 +78,8 @@ class Planner:
             async with httpx.AsyncClient(timeout=30) as c:
                 r = await c.get(
                     f"{provider['base']}/models",
-                    headers={"Authorization": f"Bearer {provider['key']}"})
+                    headers={"Authorization":
+                             f"Bearer {provider['key']}"})
                 r.raise_for_status()
                 data = r.json()
         except Exception:
@@ -127,8 +121,7 @@ class Planner:
                     attempts.append((c, m))
         if not attempts:
             raise RuntimeError("No models found.")
-
-        last_error = None
+        last = None
         for provider, model in attempts:
             try:
                 text = await self._call(provider, model, messages,
@@ -144,27 +137,20 @@ class Planner:
                         pass
                 return text
             except Exception as e:
-                last_error = f"{provider['name']}/{model}: {str(e)[:120]}"
+                last = f"{provider['name']}/{model}: {str(e)[:120]}"
                 continue
+        raise RuntimeError(f"All models failed. Last: {last}")
 
-        await asyncio.sleep(4)
-        for provider, model in attempts[:3]:
-            try:
-                text = await self._call(provider, model, messages,
-                                        max_tokens, temperature)
-                if text and text.strip():
-                    return text
-            except Exception:
-                continue
-        raise RuntimeError(f"Every model failed. Last: {last_error}")
-
-    async def _call(self, provider, model, messages, max_tokens, temperature):
+    async def _call(self, provider, model, messages, max_tokens,
+                    temperature):
         async with httpx.AsyncClient(timeout=120) as c:
             r = await c.post(
                 f"{provider['base']}/chat/completions",
-                headers={"Authorization": f"Bearer {provider['key']}"},
+                headers={"Authorization":
+                         f"Bearer {provider['key']}"},
                 json={"model": model, "messages": messages,
-                      "temperature": temperature, "max_tokens": max_tokens})
+                      "temperature": temperature,
+                      "max_tokens": max_tokens})
             if r.status_code in (429, 503):
                 await asyncio.sleep(2)
                 raise RuntimeError(f"{r.status_code} busy")
@@ -200,16 +186,14 @@ class Planner:
                 return {"mode": "execute",
                         "reply": "On it. Working now, will report back.",
                         "task": message, "confirm_action": ""}
-
         if low.strip() in ("yes", "no", "ok", "okay", "y", "n"):
             return {"mode": "chat", "reply": "Ok.",
                     "task": "", "confirm_action": ""}
-
         hist = "\n".join(f"{h.get('role','?')}: {h.get('text','')}"
                          for h in history[-6:])
         prompt = (f"Conversation:\n{hist}\n\n"
                   f'New message: "{message}"\n\n'
-                  'Reply ONLY JSON: {"mode":"chat","reply":"<your answer>"}')
+                  'Reply ONLY JSON: {"mode":"chat","reply":"<answer>"}')
         d = self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
              {"role": "user", "content": prompt}],
@@ -222,7 +206,6 @@ class Planner:
 
     async def decide(self, command, scan, tools):
         low = command.lower()
-
         if any(k in low for k in ("game", "arcade", "puzzle")):
             slug = self._slug(command)
             return {"plan_name": "build_game",
@@ -233,9 +216,7 @@ class Planner:
                          "why": "write game source"},
                         {"tool": "code.build_apk",
                          "args": {"app_slug": slug, "spec": command},
-                         "why": "compile and ship"},
-                    ]}
-
+                         "why": "compile"}]}
         if any(k in low for k in ("app", "android", "flutter", "apk",
                                   "calculator", "mobile", "tool")):
             slug = self._slug(command)
@@ -246,29 +227,22 @@ class Planner:
                          "why": "write Flutter source"},
                         {"tool": "code.build_apk",
                          "args": {"app_slug": slug, "spec": command},
-                         "why": "compile and ship"},
-                    ]}
-
+                         "why": "compile"}]}
         if any(k in low for k in ("website", "site", "landing", "html")):
             slug = self._slug(command)
             return {"plan_name": "build_website",
                     "steps": [
                         {"tool": "make.website",
                          "args": {"spec": command, "slug": slug},
-                         "why": "build static site"},
-                    ]}
-
-        if any(k in low for k in ("pitch", "article", "doc", "document",
-                                  "proposal", "essay", "letter",
-                                  "readme", "guide", "post ")):
+                         "why": "build site"}]}
+        if any(k in low for k in ("pitch", "article", "doc",
+                                  "document", "proposal", "essay")):
             slug = self._slug(command)
             return {"plan_name": "write_document",
                     "steps": [
                         {"tool": "make.document",
                          "args": {"spec": command, "slug": slug},
-                         "why": "write doc"},
-                    ]}
-
+                         "why": "write doc"}]}
         if any(k in low for k in ("script", "python", "bash",
                                   "shell", "javascript")):
             lang = "python"
@@ -282,9 +256,7 @@ class Planner:
                         {"tool": "make.script",
                          "args": {"spec": command, "language": lang,
                                   "slug": slug},
-                         "why": "write script"},
-                    ]}
-
+                         "why": "write script"}]}
         prompt = (f'Command: "{command}"\n'
                   f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
                   'Reply ONLY JSON: {"plan_name":"..",'
@@ -309,24 +281,23 @@ class Planner:
     async def scan(self, command, context):
         prompt = (f'Command: "{command}"\n'
                   f'Memory: {json.dumps(context)[:1500]}\n\n'
-                  'Reply ONLY JSON: {"resources":[],"today_opportunities":['
-                  '{"title":"..","url":"..","pays_today":true,"cost":0}]}')
+                  'Reply ONLY JSON: {"resources":[],'
+                  '"today_opportunities":[{"title":"..","url":"..",'
+                  '"pays_today":true,"cost":0}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-            max_tokens=1500))
+             {"role": "user", "content": prompt}], max_tokens=1500))
 
     async def next(self, command, mission, last_results, tools):
         prompt = (f'Command: "{command}"\n'
                   f'Mission: {json.dumps(mission)[:1200]}\n'
                   f'Results: {json.dumps(last_results)[:1200]}\n\n'
-                  'Reply ONLY one of: {"done":true,"summary":".."} '
+                  'Reply ONLY one: {"done":true,"summary":".."} '
                   'or {"steps":[...]} or {"pivot":true,"reason":".."} '
                   'or {"ask":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-            max_tokens=1200))
+             {"role": "user", "content": prompt}], max_tokens=1200))
 
     async def pivot(self, command, mission, tools):
         prompt = (f'Command: "{command}"\n'
@@ -335,18 +306,15 @@ class Planner:
                   '{"plan_name":"..","steps":[{"tool":"..","args":{}}]}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-            max_tokens=1200))
+             {"role": "user", "content": prompt}], max_tokens=1200))
 
     async def repair(self, command, mission, failed, tools):
         err = json.dumps(failed)[:1500]
-        prompt = (
-            f'Command: "{command}"\n'
-            f'Failed: {err}\n'
-            f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
-            'Reply ONLY JSON: {"steps":[{"tool":"..","args":{}}]} '
-            'or {"give_up":true,"reason":".."}')
+        prompt = (f'Command: "{command}"\n'
+                  f'Failed: {err}\n'
+                  f'Tools: {json.dumps([t["name"] for t in tools])}\n\n'
+                  'Reply ONLY JSON: {"steps":[{"tool":"..","args":{}}]} '
+                  'or {"give_up":true,"reason":".."}')
         return self._json(await self._chat(
             [{"role": "system", "content": SYSTEM},
-             {"role": "user", "content": prompt}],
-            max_tokens=1200))
+             {"role": "user", "content": prompt}], max_tokens=1200))

@@ -1,4 +1,4 @@
-"""BOAT brain: chat-first loop with universal self-healing."""
+"""BOAT brain: chat-first loop with self-healing."""
 import asyncio
 import json
 import logging
@@ -10,13 +10,12 @@ from .memory import Memory
 from .planner import Planner
 from .tools import call_tool, tool_specs, load_all
 
-
 log = logging.getLogger("boat.brain")
 
 BATCH = 4
 MAX_ITER = 20
-DEFAULT_CHAT = (os.environ.get("TELEGRAM_ALLOWED", "").split(",")[0].strip()
-                or "")
+DEFAULT_CHAT = (os.environ.get("TELEGRAM_ALLOWED", "").split(",")[0]
+                .strip() or "")
 
 
 def _resolve_chat(reply_to):
@@ -51,24 +50,20 @@ class Boat:
         log.info("handle cmd=%r chat=%r", command, chat)
         self.memory.add_chat("owner", command)
         history = self.memory.recent_chat(12)
-
         try:
             decision = await self.planner.classify(command, history)
         except Exception as e:
             log.exception("classify failed")
             decision = {"mode": "chat",
-                        "reply": f"I couldn't think just now ({e})."}
-
+                        "reply": f"Couldn't think: {e}"}
         mode = decision.get("mode", "chat")
         reply = decision.get("reply", "") or "(thinking...)"
         await self._say(chat, reply)
         self.memory.add_chat("boat", reply)
-
         if mode == "chat":
             return {"mode": "chat", "reply": reply, "chat": chat}
         if mode == "confirm":
             return await self._handle_confirm(decision, chat)
-
         task = decision.get("task") or command
         return await self._execute(task, source=source, reply_to=chat)
 
@@ -99,59 +94,39 @@ class Boat:
         mid = uuid.uuid4().hex[:10]
         self.memory.create_mission(mid, command, source)
         mission = {"id": mid, "command": command, "steps_done": [],
-                   "pivots": 0, "money_today": self.memory.money_today(),
-                   "status": "scanning"}
-
+                   "pivots": 0, "status": "scanning"}
         try:
             scan = await self.planner.scan(
                 command, self.memory.recent_context())
         except Exception as e:
-            scan = {"error": str(e), "today_opportunities": []}
-
-        for op in scan.get("today_opportunities", [])[:10]:
-            try:
-                self.memory.add_opportunity(
-                    op.get("title", "")[:200], op.get("url", ""),
-                    op.get("pays_today", False),
-                    float(op.get("cost", 0) or 0),
-                    float(op.get("eta_hours", 1) or 1),
-                    op.get("notes", "")[:300])
-            except Exception:
-                pass
+            scan = {"error": str(e)}
         mission["scan"] = scan
-
         try:
             decision = await self.planner.decide(
                 command, scan, tool_specs())
         except Exception as e:
             return self._finish(mid, "planning_failed",
                                 {"error": str(e)}, reply_to)
-
         plan = [_norm_step(s) for s in (decision.get("steps") or []) if s]
         plan = [s for s in plan if s.get("tool")][:BATCH]
-
         if not plan:
             await self._say(reply_to,
                             "No steps produced. Try 'just do it'.")
             return self._finish(mid, "no_plan", {}, reply_to)
-
         results_all = []
         for it in range(MAX_ITER):
             if not plan:
                 break
             self.memory.update_mission(mid, status="acting")
-
             results = await asyncio.gather(
-                *[self._run_step(s) for s in plan], return_exceptions=True)
+                *[self._run_step(s) for s in plan],
+                return_exceptions=True)
             norm = [r if isinstance(r, dict) else {"error": str(r)}
                     for r in results]
             results_all.extend(norm)
-
             for s, r in zip(plan, norm):
                 mission["steps_done"].append({
-                    "tool": s.get("tool"), "why": s.get("why", ""),
-                    "ok": r.get("ok", True), "result": _trim(r)})
-
+                    "tool": s.get("tool"), "ok": r.get("ok", True)})
             failed = [r for r in norm if not r.get("ok", True)]
             if failed and it < MAX_ITER - 1:
                 healed = []
@@ -161,31 +136,23 @@ class Boat:
                             "failed_step": {"tool": f.get("tool"),
                                             "args": f.get("args", {})},
                             "error": str(f.get("error", "")),
-                            "mission_context": {"command": command},
-                        })
-                        log.info("auto_heal -> %s", h)
+                            "mission_context": {"command": command}})
                         if h.get("healed"):
                             healed.extend(h.get("next_steps", []))
                     except Exception as e:
                         log.warning("auto_heal failed: %s", e)
-
                 if healed:
-                    self.memory.add_lesson(
-                        mid, "auto_heal",
-                        f"healed {len(failed)} failure(s)")
                     await self._say(reply_to,
                                     f"Attempt {it+1} failed. "
                                     f"Self-healing and retrying.")
                     plan = [_norm_step(s) for s in healed if s]
                     plan = [s for s in plan if s.get("tool")][:BATCH]
                     continue
-
                 try:
                     rep = await self.planner.repair(
                         command, mission, failed, tool_specs())
                 except Exception as e:
-                    rep = {"give_up": True, "reason": f"repair failed: {e}"}
-
+                    rep = {"give_up": True, "reason": str(e)}
                 rep_plan = [_norm_step(s)
                             for s in (rep.get("steps") or []) if s]
                 rep_plan = [s for s in rep_plan if s.get("tool")][:BATCH]
@@ -193,16 +160,15 @@ class Boat:
                     plan = rep_plan
                     continue
                 if rep.get("give_up"):
-                    return self._finish(mid, "blocked",
-                                        {"reason": rep.get("reason"),
-                                         "results": results_all}, reply_to)
-
+                    return self._finish(
+                        mid, "blocked",
+                        {"reason": rep.get("reason"),
+                         "results": results_all}, reply_to)
             try:
                 nxt = await self.planner.next(
                     command, mission, norm, tool_specs())
             except Exception as e:
                 nxt = {"done": True, "summary": f"planner error: {e}"}
-
             if nxt.get("ask"):
                 try:
                     await call_tool("telegram.ask", {
@@ -212,10 +178,8 @@ class Boat:
                     pass
                 return self._finish(mid, "awaiting_input",
                                     {"question": nxt["ask"]}, reply_to)
-
             if nxt.get("pivot"):
                 mission["pivots"] += 1
-                self.memory.update_mission(mid, pivots=mission["pivots"])
                 try:
                     piv = await self.planner.pivot(
                         command, mission, tool_specs())
@@ -225,23 +189,21 @@ class Boat:
                         for s in (piv.get("steps") or []) if s]
                 plan = [s for s in plan if s.get("tool")][:BATCH]
                 continue
-
             if nxt.get("done"):
                 return self._finish(
                     mid, "done",
                     {"summary": nxt.get("summary", ""),
                      "results": results_all}, reply_to)
-
             plan = [_norm_step(s)
                     for s in (nxt.get("steps") or []) if s]
             plan = [s for s in plan if s.get("tool")][:BATCH]
-
         return self._finish(mid, "max_iterations",
                             {"results": results_all}, reply_to)
 
     async def _run_step(self, step):
         if not isinstance(step, dict):
-            return {"tool": None, "ok": False, "error": "not a dict"}
+            return {"tool": None, "ok": False,
+                    "error": "not a dict"}
         name = step.get("tool")
         args = step.get("args") or {}
         if not name:
@@ -250,11 +212,13 @@ class Boat:
         try:
             res = await call_tool(name, args)
             return {"tool": name, "ok": True, "args": args,
-                    "ms": int((time.time() - t0) * 1000), "result": res}
+                    "ms": int((time.time() - t0) * 1000),
+                    "result": res}
         except Exception as e:
             log.exception("tool %s failed", name)
             return {"tool": name, "ok": False, "error": str(e),
-                    "args": args, "ms": int((time.time() - t0) * 1000)}
+                    "args": args,
+                    "ms": int((time.time() - t0) * 1000)}
 
     async def _say(self, chat_id, text):
         chat = _resolve_chat(chat_id)
@@ -268,26 +232,9 @@ class Boat:
             log.warning("telegram send failed: %s", e)
 
     def _finish(self, mid, status, payload, reply_to):
-        self.memory.update_mission(mid, status=status,
-                                   money_today=self.memory.money_today())
+        self.memory.update_mission(mid, status=status)
         summary = json.dumps(payload)[:900]
         self.memory.add_chat("boat", f"[{status}] {summary}")
-        asyncio.create_task(self._say(reply_to, f"[{status}] {summary}"))
-        if status in ("done", "blocked", "planning_failed"):
-            asyncio.create_task(self._evolve(mid, status, summary))
+        asyncio.create_task(self._say(reply_to,
+                                      f"[{status}] {summary}"))
         return {"mission_id": mid, "status": status, **payload}
-
-    async def _evolve(self, mid, status, summary):
-        try:
-            await call_tool("meta.evolve", {
-                "mission_id": mid, "outcome": status, "trace": summary})
-        except Exception:
-            pass
-
-
-def _trim(r, n=800):
-    try:
-        s = json.dumps(r)
-        return json.loads(s if len(s) <= n else s[:n] + '..."')
-    except Exception:
-        return str(r)[:n]
