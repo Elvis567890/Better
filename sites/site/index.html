@@ -3,20 +3,68 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Instant Business Site</title>
-  <meta name="description" content="Get a professional, SEO‑ready landing page for your business in 24 hours. No code, no hassle. One‑time price: $199.">
+  <title>Freelance Graphic Design Services</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="hero">
-    <h1>Instant Business Site</h1>
-    <p class="lead">Get a professional, SEO‑ready landing page for your business in 24 hours. No code, no hassle. One‑time price: $199.</p>
-    <div class="price">$199</div>
-    <a href="https://buy.stripe.com/example" class="cta-button" id="cta">Get Started</a>
+    <nav class="navbar">
+      <div class="logo">DesignCo</div>
+      <ul class="nav-links">
+        <li><a href="#services">Services</a></li>
+        <li><a href="#portfolio">Portfolio</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+      <div class="menu-toggle">&#9776;</div>
+    </nav>
+    <div class="hero-content">
+      <h1>Professional Logo &amp; Brand Design</h1>
+      <p>Elevate your small business with a memorable visual identity.</p>
+      <a href="#contact" class="cta-button">Get a Quote</a>
+    </div>
   </header>
 
+  <section id="services" class="section">
+    <h2>Services</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Logo Design</h3>
+        <p>Unique, scalable logos that capture your brand essence.</p>
+      </div>
+      <div class="card">
+        <h3>Brand Identity</h3>
+        <p>Complete visual systems: colors, typography, guidelines.</p>
+      </div>
+      <div class="card">
+        <h3>Marketing Materials</h3>
+        <p>Business cards, flyers, social media graphics, and more.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="portfolio" class="section">
+    <h2>Portfolio</h2>
+    <div class="gallery">
+      <img src="https://via.placeholder.com/300x200?text=Project+1" alt="Project 1">
+      <img src="https://via.placeholder.com/300x200?text=Project+2" alt="Project 2">
+      <img src="https://via.placeholder.com/300x200?text=Project+3" alt="Project 3">
+      <img src="https://via.placeholder.com/300x200?text=Project+4" alt="Project 4">
+    </div>
+  </section>
+
+  <section id="contact" class="section">
+    <h2>Contact</h2>
+    <form id="contactForm">
+      <input type="text" name="name" placeholder="Your Name" required>
+      <input type="email" name="email" placeholder="Email Address" required>
+      <textarea name="message" placeholder="How can I help?" rows="4" required></textarea>
+      <button type="submit">Send Message</button>
+      <p id="formMessage" class="form-message"></p>
+    </form>
+  </section>
+
   <footer>
-    <p>&copy; 2026 Instant Business Site. All rights reserved.</p>
+    <p>&copy; 2026 DesignCo. All rights reserved.</p>
   </footer>
 
   <script src="script.js"></script>
