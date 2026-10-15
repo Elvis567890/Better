@@ -1,33 +1,14 @@
 # Doc
 
-## 1. Gig Economy Apps
-- Sign up for Uber, Lyft, DoorDash, Instacart, or TaskRabbit.
-- Complete profile, upload ID, and pass background check.
-- Start earning within hours.
+## Graphic Design Proposal
 
-## 2. Freelance Micro‑Tasks
-- Join Fiverr, Upwork, or Amazon Mechanical Turk.
-- Offer quick services: graphic design, copywriting, data entry, voice‑overs.
+Dear [Client],
 
-## 3. Sell Digital Products
-- Create e‑books, printables, templates.
-- List on Gumroad, Etsy, or Shopify.
+I am a professional graphic designer with over 5 years of experience in logo, brand identity, and illustration work. I can deliver high-quality designs within 3 days and ensure your brand stands out.
 
-## 4. Affiliate Marketing
-- Pick a niche product.
-- Create a simple landing page or social media posts.
-- Earn commissions on sales.
+Portfolio: https://yourportfolio.com
 
-## 5. Mobile Services
-- Car wash/detailing, pet sitting, dog walking, pop‑up coffee stand.
-- Advertise locally via flyers or a quick website.
+Let's discuss your project details and get started!
 
-## 6. Online Tutoring
-- Teach a skill via Zoom or VIPKid.
-- Charge per session.
-
-### How to Get Started in 30 Minutes
-1. Choose one idea.
-2. Sign up and complete profile.
-3. Start offering services.
-4. Promote on social media or local groups.
+Best regards,  
+[Your Name]
