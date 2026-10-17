@@ -1,22 +1,12 @@
-document.getElementById('bookBtn').addEventListener('click', function () {
-  document.getElementById('modal').classList.remove('hidden');
+// Simple interaction: add a tiny bounce effect on button click
+document.querySelectorAll('.btn').forEach(function(btn) {
+  btn.addEventListener('click', function(e) {
+    btn.classList.add('active');
+    setTimeout(function() { btn.classList.remove('active'); }, 150);
+  });
 });
 
-document.querySelector('.close').addEventListener('click', function () {
-  document.getElementById('modal').classList.add('hidden');
-});
-
-window.addEventListener('click', function (e) {
-  if (e.target === document.getElementById('modal')) {
-    document.getElementById('modal').classList.add('hidden');
-  }
-});
-
-document.getElementById('bookingForm').addEventListener('submit', function (e) {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(this));
-  const time = data.time ? new Date(data.time).toLocaleString() : 'your chosen time';
-  alert(`Thank you, ${data.name}! Your free ride is booked for ${time}.`);
-  this.reset();
-  document.getElementById('modal').classList.add('hidden');
-});
+/* Add CSS for the active state (injected via JS) */
+var style = document.createElement('style');
+style.innerHTML = " .btn.active { transform: scale(0.96); } ";
+document.head.appendChild(style);
