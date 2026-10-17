@@ -1,39 +1,22 @@
-// Smooth scroll for internal links (fallback for older browsers)
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-  anchor.addEventListener('click', function (e) {
-    const target = document.querySelector(this.getAttribute('href'));
-    if (target) {
-      e.preventDefault();
-      target.scrollIntoView({ behavior: 'smooth' });
-    }
-  });
+document.getElementById('bookBtn').addEventListener('click', function () {
+  document.getElementById('modal').classList.remove('hidden');
 });
 
-// Simple testimonial slider
-const testimonials = document.querySelectorAll('.testimonial');
-let current = 0;
-function showTestimonial(index) {
-  testimonials.forEach((t, i) => {
-    t.classList.toggle('active', i === index);
-  });
-}
-function nextTestimonial() {
-  current = (current + 1) % testimonials.length;
-  showTestimonial(current);
-}
-// Initialize
-if (testimonials.length) {
-  showTestimonial(0);
-  setInterval(nextTestimonial, 5000);
-}
+document.querySelector('.close').addEventListener('click', function () {
+  document.getElementById('modal').classList.add('hidden');
+});
 
-// Simple form handling – just shows an alert (replace with real backend as needed)
-const form = document.getElementById('cta-form');
-if (form) {
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    const name = this.name.value.trim() || 'Friend';
-    alert(`Thank you, ${name}! Your request has been received. I will contact you shortly.`);
-    this.reset();
-  });
-}
+window.addEventListener('click', function (e) {
+  if (e.target === document.getElementById('modal')) {
+    document.getElementById('modal').classList.add('hidden');
+  }
+});
+
+document.getElementById('bookingForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(this));
+  const time = data.time ? new Date(data.time).toLocaleString() : 'your chosen time';
+  alert(`Thank you, ${data.name}! Your free ride is booked for ${time}.`);
+  this.reset();
+  document.getElementById('modal').classList.add('hidden');
+});
