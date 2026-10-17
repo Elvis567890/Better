@@ -3,69 +3,117 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quick Freelance Services</title>
+  <title>Boost Your Online Presence</title>
   <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-  <header>
+  <header class="hero">
     <div class="container">
-      <h1>Quick Freelance Services</h1>
-      <nav>
-        <ul>
-          <li><a href="#home">Home</a></li>
-          <li><a href="#services">Services</a></li>
-          <li><a href="#contact">Contact</a></li>
-        </ul>
-      </nav>
+      <h1>Grow Your Business Online</h1>
+      <p>Social Media Management • Quick Website Fixes • Local SEO</p>
+      <a href="#contact" class="cta-button">Book a 15‑min free strategy call</a>
     </div>
   </header>
 
-  <section id="home" class="section">
-    <div class="container">
-      <h2>Welcome</h2>
-      <p>Professional freelance solutions tailored to your needs.</p>
-    </div>
-  </section>
-
-  <section id="services" class="section">
-    <div class="container">
-      <h2>Our Services</h2>
-      <div class="services-grid">
-        <div class="service-item">
-          <h3>Web Development</h3>
-          <p>Responsive websites, e‑commerce, and more.</p>
-        </div>
-        <div class="service-item">
-          <h3>Graphic Design</h3>
-          <p>Logos, branding, and visual assets.</p>
-        </div>
-        <div class="service-item">
-          <h3>Content Writing</h3>
-          <p>SEO‑friendly articles, blogs, and copy.</p>
-        </div>
+  <section class="services container">
+    <h2>What I Do</h2>
+    <div class="service-cards">
+      <div class="card">
+        <h3>Social Media Management</h3>
+        <p>Content creation, scheduling, community engagement, and analytics.</p>
+      </div>
+      <div class="card">
+        <h3>Quick Website Fixes</h3>
+        <p>Speed optimization, bug fixing, and minor redesigns delivered fast.</p>
+      </div>
+      <div class="card">
+        <h3>Local SEO</h3>
+        <p>Google My Business, citation building, and on‑page optimization for local searches.</p>
       </div>
     </div>
   </section>
 
-  <section id="contact" class="section">
-    <div class="container">
-      <h2>Contact Us</h2>
-      <form id="contactForm">
-        <label for="name">Name</label>
-        <input type="text" id="name" name="name" required>
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" required>
-        <label for="message">Message</label>
-        <textarea id="message" name="message" rows="4" required></textarea>
-        <button type="submit">Send Message</button>
-        <p id="formMessage" class="form-message"></p>
-      </form>
+  <section class="portfolio container">
+    <h2>Portfolio</h2>
+    <div class="gallery">
+      <img src="https://via.placeholder.com/300x200?text=Project+1" alt="Project 1">
+      <img src="https://via.placeholder.com/300x200?text=Project+2" alt="Project 2">
+      <img src="https://via.placeholder.com/300x200?text=Project+3" alt="Project 3">
+      <img src="https://via.placeholder.com/300x200?text=Project+4" alt="Project 4">
     </div>
   </section>
 
-  <footer>
+  <section class="pricing container">
+    <h2>Pricing</h2>
+    <div class="pricing-tiers">
+      <div class="tier">
+        <h3>Starter</h3>
+        <p class="price">$199/mo</p>
+        <ul>
+          <li>Up to 3 social platforms</li>
+          <li>5 website fixes</li>
+          <li>Basic local SEO</li>
+        </ul>
+        <a href="#contact" class="cta-button small">Select</a>
+      </div>
+      <div class="tier featured">
+        <h3>Growth</h3>
+        <p class="price">$399/mo</p>
+        <ul>
+          <li>All platforms</li>
+          <li>Unlimited website fixes</li>
+          <li>Advanced local SEO</li>
+          <li>Monthly performance report</li>
+        </ul>
+        <a href="#contact" class="cta-button small">Select</a>
+      </div>
+      <div class="tier">
+        <h3>Premium</h3>
+        <p class="price">$699/mo</p>
+        <ul>
+          <li>Dedicated account manager</li>
+          <li>Custom campaigns</li>
+          <li>Full SEO audit</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="#contact" class="cta-button small">Select</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="testimonials container">
+    <h2>What Clients Say</h2>
+    <div class="testimonials-slider">
+      <div class="testimonial">
+        <p>"My social media engagement doubled in just 2 months!"</p>
+        <cite>- Alex R., Boutique Owner</cite>
+      </div>
+      <div class="testimonial">
+        <p>"Fast website fixes saved us from losing sales during a promotion."</p>
+        <cite>- Maya L., E‑commerce Manager</cite>
+      </div>
+      <div class="testimonial">
+        <p>"Local SEO put us on the map—literally. We’re now #1 in our town."</p>
+        <cite>- Sam K., Restaurant Founder</cite>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" class="contact container">
+    <h2>Ready to Get Started?</h2>
+    <form id="cta-form">
+      <input type="text" name="name" placeholder="Your Name" required>
+      <input type="email" name="email" placeholder="Email Address" required>
+      <input type="tel" name="phone" placeholder="Phone (optional)">
+      <textarea name="message" placeholder="Brief description (optional)"></textarea>
+      <button type="submit" class="cta-button">Book My Free Call</button>
+    </form>
+  </section>
+
+  <footer class="footer">
     <div class="container">
-      <p>&copy; 2026 Quick Freelance Services. All rights reserved.</p>
+      <p>&copy; 2026 Your Name. All rights reserved.</p>
     </div>
   </footer>
 
