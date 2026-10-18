@@ -1,13 +1,15 @@
 # Doc
 
-## Quick Pitch for Ride‑Share & Delivery Drivers
+## Quick Service Proposal
 
-Hi there!
+### Scope
+Brief description of the service offered.
 
-I’m a local driver ready to start earning today. I have a clean vehicle, flexible hours, and can hit the road immediately. I’m looking for short‑term gigs like rideshare, food delivery, or package transport. Let’s chat for 10 minutes and I’ll show you how I can boost your service capacity right now.
+### Timeline
+Delivery within 24–48 hours.
 
-- Available today  
-- Reliable, insured vehicle  
-- Fast onboarding  
+### Pricing
+Flat rate per task, with discounts for bulk orders.
 
-Reply if you need an extra driver today!
+### Payment
+PayPal, Stripe, or direct bank transfer.
