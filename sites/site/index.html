@@ -1,60 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Graphic Design Portfolio</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Freelance Services</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header class="site-header">
-        <h1>Graphic Design Portfolio</h1>
-        <nav>
-            <a href="#services">Services</a>
-            <a href="#portfolio">Portfolio</a>
-            <a href="#contact">Contact</a>
-        </nav>
-    </header>
-
-    <section class="hero">
-        <h2>Creative Solutions for Your Brand</h2>
-        <p>Minimalist designs that make an impact.</p>
-    </section>
-
-    <section id="services" class="services">
-        <h2>Services</h2>
+  <header class="header">
+    <div class="container">
+      <h1 class="logo">Your Name</h1>
+      <nav class="nav">
         <ul>
-            <li>Logo Design</li>
-            <li>Brand Identity</li>
-            <li>Print Design</li>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a href="#contact">Contact</a></li>
         </ul>
-    </section>
+      </nav>
+      <button class="nav-toggle" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
 
-    <section id="portfolio" class="portfolio">
-        <h2>Portfolio</h2>
-        <div class="grid">
-            <img src="https://via.placeholder.com/300x200?text=Project+1" alt="Project 1">
-            <img src="https://via.placeholder.com/300x200?text=Project+2" alt="Project 2">
-            <img src="https://via.placeholder.com/300x200?text=Project+3" alt="Project 3">
-            <img src="https://via.placeholder.com/300x200?text=Project+4" alt="Project 4">
+  <section class="hero">
+    <div class="container">
+      <h2>Professional Freelance Services</h2>
+      <p>Delivering high-quality solutions for your business needs.</p>
+      <a href="#contact" class="btn">Hire Me</a>
+    </div>
+  </section>
+
+  <section id="services" class="services">
+    <div class="container">
+      <h2>Services</h2>
+      <div class="service-list">
+        <div class="service-item">
+          <h3>Web Development</h3>
+          <p>Responsive, modern websites built with the latest technologies.</p>
         </div>
-    </section>
+        <div class="service-item">
+          <h3>UI/UX Design</h3>
+          <p>Intuitive and engaging designs that enhance user experience.</p>
+        </div>
+        <div class="service-item">
+          <h3>Consulting</h3>
+          <p>Strategic advice to help you grow your digital presence.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <section id="contact" class="contact">
-        <h2>Contact</h2>
-        <form id="contactForm">
-            <input type="text" name="name" placeholder="Your Name" required>
-            <input type="email" name="email" placeholder="Your Email" required>
-            <textarea name="message" placeholder="Your Message" rows="4" required></textarea>
-            <button type="submit">Send</button>
-        </form>
-        <p id="formMessage" class="hidden"></p>
-    </section>
+  <section id="about" class="about">
+    <div class="container">
+      <h2>About Me</h2>
+      <p>Passionate freelancer with several years of experience in delivering top‑notch digital solutions.</p>
+    </div>
+  </section>
 
-    <footer class="site-footer">
-        <p>&copy; 2026 Graphic Design Portfolio</p>
-    </footer>
+  <section id="contact" class="contact">
+    <div class="container">
+      <h2>Contact</h2>
+      <form id="contactForm">
+        <input type="text" name="name" placeholder="Your Name" required>
+        <input type="email" name="email" placeholder="Your Email" required>
+        <textarea name="message" placeholder="Your Message" rows="5" required></textarea>
+        <button type="submit" class="btn">Send Message</button>
+      </form>
+      <p id="formMessage" class="form-message"></p>
+    </div>
+  </section>
 
-    <script src="script.js"></script>
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2026 Your Name. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
 </body>
 </html>
