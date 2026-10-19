@@ -1,16 +1,150 @@
-/* Reset */
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#333;background:#f9f9f9;}
-header.hero{background:#2c3e50;color:#fff;padding:4rem 1rem;text-align:center;}
-header.hero h1{font-size:2.5rem;margin-bottom:0.5rem;}
-header.hero p{font-size:1.2rem;margin-bottom:1.5rem;}
-header.hero .contact-btn{display:inline-block;background:#e74c3c;color:#fff;padding:0.75rem 1.5rem;border-radius:4px;text-decoration:none;font-weight:bold;transition:background .3s;}
-header.hero .contact-btn:hover{background:#c0392b;}
-main{max-width:800px;margin:2rem auto;padding:0 1rem;}
-section.section{background:#fff;margin-bottom:1.5rem;padding:1.5rem;border-radius:6px;box-shadow:0 2px 5px rgba(0,0,0,0.1);}
-section.section h2{font-size:1.8rem;margin-bottom:0.5rem;color:#2c3e50;}
-footer{text-align:center;padding:1rem;background:#2c3e50;color:#fff;}
-@media (max-width:600px){
-    header.hero h1{font-size:2rem;}
-    header.hero p{font-size:1rem;}
+/* Minimalist design */
+:root {
+    --font-primary: 'Helvetica Neue', Arial, sans-serif;
+    --color-bg: #fafafa;
+    --color-text: #333;
+    --color-primary: #0066cc;
+    --color-accent: #ff6600;
+    --max-width: 1200px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-primary);
+    background: var(--color-bg);
+    color: var(--color-text);
+    line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.site-header {
+    background: var(--color-primary);
+    color: #fff;
+    padding: 1rem;
+    text-align: center;
+}
+
+.site-header nav {
+    margin-top: 0.5rem;
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+}
+
+.hero {
+    background: var(--color-accent);
+    color: #fff;
+    padding: 4rem 1rem;
+    text-align: center;
+}
+
+.services, .portfolio, .contact {
+    max-width: var(--max-width);
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.services ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.services li {
+    background: #fff;
+    padding: 0.75rem 1rem;
+    border-left: 4px solid var(--color-primary);
+}
+
+.portfolio .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.portfolio img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border: 2px solid #ddd;
+    transition: transform 0.3s ease;
+}
+
+.portfolio img:hover {
+    transform: scale(1.05);
+    border-color: var(--color-primary);
+}
+
+.contact form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-width: 500px;
+    margin: 1rem auto;
+}
+
+.contact input,
+.contact textarea {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 1rem;
+}
+
+.contact button {
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    padding: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.contact button:hover {
+    background: var(--color-accent);
+}
+
+.hidden {
+    display: none;
+}
+
+.site-footer {
+    margin-top: auto;
+    background: #222;
+    color: #ddd;
+    text-align: center;
+    padding: 1rem;
+    font-size: 0.9rem;
+}
+
+/* Responsive tweaks */
+@media (max-width: 600px) {
+    .site-header nav {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .hero {
+        padding: 2rem 1rem;
+    }
 }
