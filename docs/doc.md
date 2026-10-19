@@ -1,15 +1,5 @@
 # Doc
 
-## Quick Service Proposal
+## Freelance Proposal
 
-### Scope
-Brief description of the service offered.
-
-### Timeline
-Delivery within 24–48 hours.
-
-### Pricing
-Flat rate per task, with discounts for bulk orders.
-
-### Payment
-PayPal, Stripe, or direct bank transfer.
+Hello, I offer quick freelance services and can start today. Let me know if you need help.
