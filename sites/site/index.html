@@ -1,117 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast Self-Drive Services</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuickInvoice – Instant Invoicing App</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header>
-        <div class="container">
-            <h1>Fast Self-Drive Services</h1>
-            <nav>
-                <ul>
-                    <li><a href="#home">Home</a></li>
-                    <li><a href="#about">About Me</a></li>
-                    <li><a href="#services">Services</a></li>
-                    <li><a href="#pricing">Pricing</a></li>
-                    <li><a href="#contact">Contact</a></li>
-                </ul>
-            </nav>
-        </div>
-    </header>
+  <header class="hero">
+    <h1>Generate Invoices Anywhere, Anytime</h1>
+    <p>Create professional invoices on the go, export to PDF, and share via WhatsApp.</p>
+    <button id="downloadBtn">Download Now</button>
+  </header>
 
-    <section id="home" class="section">
-        <div class="container">
-            <h2>Welcome</h2>
-            <p>Your reliable partner for self‑driven car rentals. Fast, affordable, and hassle‑free.</p>
-        </div>
-    </section>
+  <section class="features">
+    <h2>Features</h2>
+    <ul>
+      <li>Instant invoice generation</li>
+      <li>PDF export</li>
+      <li>One‑click WhatsApp sharing</li>
+      <li>Offline mode</li>
+    </ul>
+  </section>
 
-    <section id="about" class="section">
-        <div class="container">
-            <h2>About Me</h2>
-            <p>Hi! I'm Alex, a car‑enthusiast turned entrepreneur. I created this service to give you the freedom to drive on your own terms.</p>
-        </div>
-    </section>
+  <section class="pricing">
+    <h2>Pricing</h2>
+    <div class="plans">
+      <div class="plan">
+        <h3>Free</h3>
+        <p class="price">$0</p>
+        <ul>
+          <li>Basic invoices</li>
+          <li>PDF export</li>
+        </ul>
+        <button class="selectBtn">Select</button>
+      </div>
+      <div class="plan">
+        <h3>Pro</h3>
+        <p class="price">$4.99/month</p>
+        <ul>
+          <li>Unlimited invoices</li>
+          <li>Custom branding</li>
+          <li>Priority support</li>
+        </ul>
+        <button class="selectBtn">Select</button>
+      </div>
+    </div>
+  </section>
 
-    <section id="services" class="section">
-        <div class="container">
-            <h2>Services</h2>
-            <ul class="service-list">
-                <li>Daily self‑drive rentals</li>
-                <li>Weekly &amp; monthly packages</li>
-                <li>Premium &amp; economy vehicle options</li>
-                <li>24/7 roadside assistance</li>
-            </ul>
-        </div>
-    </section>
+  <footer>
+    <p>Contact: <a href="mailto:support@quickinvoice.app">support@quickinvoice.app</a></p>
+  </footer>
 
-    <section id="pricing" class="section">
-        <div class="container">
-            <h2>Pricing</h2>
-            <table class="pricing-table">
-                <thead>
-                    <tr>
-                        <th>Plan</th>
-                        <th>Duration</th>
-                        <th>Price</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Economy</td>
-                        <td>1 Day</td>
-                        <td>$30</td>
-                    </tr>
-                    <tr>
-                        <td>Standard</td>
-                        <td>1 Week</td>
-                        <td>$180</td>
-                    </tr>
-                    <tr>
-                        <td>Premium</td>
-                        <td>1 Month</td>
-                        <td>$650</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section id="contact" class="section">
-        <div class="container">
-            <h2>Contact</h2>
-            <form id="contactForm" novalidate>
-                <div class="form-group">
-                    <label for="name">Name *</label>
-                    <input type="text" id="name" name="name" required>
-                </div>
-                <div class="form-group">
-                    <label for="email">Email *</label>
-                    <input type="email" id="email" name="email" required>
-                </div>
-                <div class="form-group">
-                    <label for="phone">Phone</label>
-                    <input type="tel" id="phone" name="phone">
-                </div>
-                <div class="form-group">
-                    <label for="message">Message *</label>
-                    <textarea id="message" name="message" rows="4" required></textarea>
-                </div>
-                <button type="submit">Send Message</button>
-                <p id="formMessage" class="form-message"></p>
-            </form>
-        </div>
-    </section>
-
-    <footer>
-        <div class="container">
-            <p>&copy; 2026 Fast Self-Drive Services. All rights reserved.</p>
-        </div>
-    </footer>
-
-    <script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
