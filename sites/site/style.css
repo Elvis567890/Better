@@ -1,101 +1,163 @@
-/* Reset */
+/* Reset & basic layout */
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-html, body {
-  font-family: Arial, Helvetica, sans-serif;
-  line-height: 1.6;
-  color: #333;
-  background-color: #f9f9f9;
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f9f9f9;
 }
 
 .container {
-  width: 90%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1rem 0;
+    width: 90%;
+    max-width: 1200px;
+    margin: auto;
+    padding: 1rem 0;
 }
 
-/* Hero */
-.hero {
-  background: linear-gradient(135deg, #0066ff, #33ccff);
-  color: #fff;
-  text-align: center;
-  padding: 4rem 0;
-}
-.hero h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-.hero .subtitle {
-  font-size: 1.2rem;
-  margin-bottom: 1.5rem;
-}
-.hero .btn {
-  background: #fff;
-  color: #0066ff;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  text-decoration: none;
-  font-weight: bold;
+header {
+    background: #0066cc;
+    color: #fff;
 }
 
-/* About */
-.about {
-  background: #fff;
-  padding: 3rem 0;
-  text-align: center;
-}
-.about h2 {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-}
-.about p {
-  font-size: 1.1rem;
-  max-width: 800px;
-  margin: 0 auto;
+header .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-/* Contact */
-.contact {
-  background: #f0f8ff;
-  padding: 3rem 0;
-  text-align: center;
-}
-.contact h2 {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-}
-.contact p {
-  margin-bottom: 1rem;
-}
-.contact .whatsapp {
-  background: #25D366;
-  color: #fff;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  text-decoration: none;
-  font-weight: bold;
+header h1 {
+    margin: 0.5rem 0;
+    font-size: 2rem;
 }
 
-/* Footer */
+nav ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+}
+
+nav a {
+    color: #fff;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+nav a:hover {
+    color: #ffdd57;
+}
+
+.section {
+    padding: 3rem 0;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.section:nth-of-type(even) {
+    background: #f1f1f1;
+}
+
+h2 {
+    margin-bottom: 1rem;
+    color: #0066cc;
+    text-align: center;
+}
+
+.service-list {
+    list-style: disc inside;
+    max-width: 600px;
+    margin: auto;
+    line-height: 1.8;
+}
+
+.pricing-table {
+    width: 100%;
+    max-width: 800px;
+    margin: auto;
+    border-collapse: collapse;
+}
+
+.pricing-table th,
+.pricing-table td {
+    border: 1px solid #ccc;
+    padding: 0.75rem;
+    text-align: center;
+}
+
+.pricing-table th {
+    background: #0066cc;
+    color: #fff;
+}
+
+/* Contact Form */
+form {
+    max-width: 600px;
+    margin: auto;
+    display: grid;
+    gap: 1rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+label {
+    margin-bottom: 0.3rem;
+    font-weight: bold;
+}
+
+input, textarea {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+button {
+    background: #0066cc;
+    color: #fff;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #004999;
+}
+
+.form-message {
+    margin-top: 0.5rem;
+    font-weight: bold;
+}
+
 footer {
-  background: #333;
-  color: #fff;
-  text-align: center;
-  padding: 1rem 0;
-  font-size: 0.9rem;
+    background: #333;
+    color: #fff;
+    text-align: center;
+    padding: 1rem 0;
 }
 
 /* Responsive */
-@media (min-width: 768px) {
-  .hero h1 {
-    font-size: 3.5rem;
-  }
-  .hero .subtitle {
-    font-size: 1.5rem;
-  }
+@media (max-width: 768px) {
+    header .container {
+        align-items: flex-start;
+    }
+    nav ul {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .pricing-table th, .pricing-table td {
+        font-size: 0.9rem;
+    }
 }
