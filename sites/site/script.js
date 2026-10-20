@@ -1,1 +1,17 @@
-document.addEventListener('DOMContentLoaded', function () {\n  // Mobile navigation toggle\n  const navToggle = document.querySelector('.nav-toggle');\n  const navList = document.querySelector('.nav-list');\n  navToggle.addEventListener('click', function () {\n    navList.classList.toggle('show');\n  });\n\n  // Simple contact form handling\n  const form = document.getElementById('contactForm');\n  const messageEl = form.querySelector('.form-message');\n\n  form.addEventListener('submit', function (e) {\n    e.preventDefault();\n    // Basic validation (HTML5 already does it, but we add a friendly message)\n    if (form.checkValidity()) {\n      messageEl.style.color = 'green';\n      messageEl.textContent = 'Thank you! Your message has been sent.';\n      form.reset();\n    } else {\n      messageEl.style.color = 'red';\n      messageEl.textContent = 'Please fill out all fields correctly.';\n    }\n  });\n});
+// Smooth scroll for internal links
+document.addEventListener('DOMContentLoaded', function() {
+  const links = document.querySelectorAll('a.scroll');
+  links.forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      const targetId = this.getAttribute('href').substring(1);
+      const target = document.getElementById(targetId);
+      if (target) {
+        window.scrollTo({
+          top: target.offsetTop - 20,
+          behavior: 'smooth'
+        });
+      }
+    });
+  });
+});
