@@ -1,1 +1,101 @@
-/* Reset & basic */\n* {\n  margin: 0;\n  padding: 0;\n  box-sizing: border-box;\n}\n\nhtml {\n  font-family: Arial, Helvetica, sans-serif;\n  line-height: 1.6;\n}\n\nbody {\n  color: #333;\n  background: #f9f9f9;\n}\n\n.container {\n  max-width: 1100px;\n  margin: 0 auto;\n  padding: 0 15px;\n}\n\n/* Header */\n.header {\n  background: #004466;\n  color: #fff;\n}\n.header .container {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  padding: 15px 0;\n}\n.logo {\n  font-size: 1.5rem;\n}\n.nav-list {\n  list-style: none;\n  display: flex;\n  gap: 20px;\n}\n.nav-list a {\n  color: #fff;\n  text-decoration: none;\n  font-weight: 500;\n}\n.nav-toggle {\n  display: none;\n  background: none;\n  border: none;\n  color: #fff;\n  font-size: 1.5rem;\n}\n\n/* Hero */\n.hero {\n  background: url('https://picsum.photos/seed/hero/1200/400') center/cover no-repeat;\n  color: #fff;\n  text-align: center;\n  padding: 80px 15px;\n}\n.hero h2 {\n  font-size: 2rem;\n  margin-bottom: 10px;\n}\n.hero p {\n  font-size: 1.1rem;\n}\n\n/* Services */\n.services {\n  padding: 60px 0;\n  background: #fff;\n}\n.services h2 {\n  text-align: center;\n  margin-bottom: 40px;\n}\n.service-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));\n  gap: 20px;\n}\n.service {\n  background: #e3f2fd;\n  padding: 20px;\n  border-radius: 8px;\n  text-align: center;\n}\n.service h3 {\n  margin-bottom: 10px;\n  color: #004466;\n}\n\n/* Contact */\n.contact {\n  padding: 60px 0;\n}\n.contact h2 {\n  text-align: center;\n  margin-bottom: 30px;\n}\nform {\n  display: grid;\n  gap: 15px;\n  max-width: 500px;\n  margin: 0 auto;\n}\nlabel {\n  display: flex;\n  flex-direction: column;\n  font-weight: 500;\n}\ninput, textarea {\n  padding: 8px;\n  border: 1px solid #ccc;\n  border-radius: 4px;\n  font: inherit;\n}\nbutton {\n  padding: 10px 20px;\n  background: #004466;\n  color: #fff;\n  border: none;\n  border-radius: 4px;\n  cursor: pointer;\n  font-size: 1rem;\n}\nbutton:hover {\n  background: #003355;\n}\n.form-message {\n  margin-top: 10px;\n  font-weight: 500;\n}\n\n/* Footer */\n.footer {\n  background: #222;\n  color: #ddd;\n  text-align: center;\n  padding: 15px 0;\n}\n\n/* Responsive */\n@media (max-width: 768px) {\n  .nav-list {\n    flex-direction: column;\n    background: #004466;\n    position: absolute;\n    top: 60px;\n    right: 0;\n    width: 200px;\n    display: none;\n    padding: 10px;\n  }\n  .nav-list.show {\n    display: flex;\n  }\n  .nav-toggle {\n    display: block;\n  }\n}
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: #f9f9f9;
+}
+
+.container {
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem 0;
+}
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, #0066ff, #33ccff);
+  color: #fff;
+  text-align: center;
+  padding: 4rem 0;
+}
+.hero h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+.hero .subtitle {
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+.hero .btn {
+  background: #fff;
+  color: #0066ff;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+/* About */
+.about {
+  background: #fff;
+  padding: 3rem 0;
+  text-align: center;
+}
+.about h2 {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+.about p {
+  font-size: 1.1rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Contact */
+.contact {
+  background: #f0f8ff;
+  padding: 3rem 0;
+  text-align: center;
+}
+.contact h2 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+.contact p {
+  margin-bottom: 1rem;
+}
+.contact .whatsapp {
+  background: #25D366;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+/* Footer */
+footer {
+  background: #333;
+  color: #fff;
+  text-align: center;
+  padding: 1rem 0;
+  font-size: 0.9rem;
+}
+
+/* Responsive */
+@media (min-width: 768px) {
+  .hero h1 {
+    font-size: 3.5rem;
+  }
+  .hero .subtitle {
+    font-size: 1.5rem;
+  }
+}
