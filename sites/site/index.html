@@ -1,41 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fast Self-Drive Services</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Self-Drive Services</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="hero">
-    <div class="container">
-      <h1>Fast Self-Drive Services</h1>
-      <p class="subtitle">On-demand delivery &amp; transport wherever you are</p>
-      <a href="#contact" class="btn scroll">Contact Us</a>
-    </div>
-  </header>
+    <header>
+        <div class="container">
+            <h1>Fast Self-Drive Services</h1>
+            <nav>
+                <ul>
+                    <li><a href="#home">Home</a></li>
+                    <li><a href="#about">About Me</a></li>
+                    <li><a href="#services">Services</a></li>
+                    <li><a href="#pricing">Pricing</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
 
-  <section class="about">
-    <div class="container">
-      <h2>What We Offer</h2>
-      <p>Professional, reliable, and flexible driving services for businesses and individuals.</p>
-    </div>
-  </section>
+    <section id="home" class="section">
+        <div class="container">
+            <h2>Welcome</h2>
+            <p>Your reliable partner for self‑driven car rentals. Fast, affordable, and hassle‑free.</p>
+        </div>
+    </section>
 
-  <section id="contact" class="contact">
-    <div class="container">
-      <h2>Get in Touch</h2>
-      <p>Ready to book a ride or need more information?</p>
-      <a href="https://wa.me/1234567890" target="_blank" class="btn whatsapp">Chat on WhatsApp</a>
-    </div>
-  </section>
+    <section id="about" class="section">
+        <div class="container">
+            <h2>About Me</h2>
+            <p>Hi! I'm Alex, a car‑enthusiast turned entrepreneur. I created this service to give you the freedom to drive on your own terms.</p>
+        </div>
+    </section>
 
-  <footer>
-    <div class="container">
-      <p>&copy; 2026 Fast Self-Drive Services. All rights reserved.</p>
-    </div>
-  </footer>
+    <section id="services" class="section">
+        <div class="container">
+            <h2>Services</h2>
+            <ul class="service-list">
+                <li>Daily self‑drive rentals</li>
+                <li>Weekly &amp; monthly packages</li>
+                <li>Premium &amp; economy vehicle options</li>
+                <li>24/7 roadside assistance</li>
+            </ul>
+        </div>
+    </section>
 
-  <script src="script.js"></script>
+    <section id="pricing" class="section">
+        <div class="container">
+            <h2>Pricing</h2>
+            <table class="pricing-table">
+                <thead>
+                    <tr>
+                        <th>Plan</th>
+                        <th>Duration</th>
+                        <th>Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Economy</td>
+                        <td>1 Day</td>
+                        <td>$30</td>
+                    </tr>
+                    <tr>
+                        <td>Standard</td>
+                        <td>1 Week</td>
+                        <td>$180</td>
+                    </tr>
+                    <tr>
+                        <td>Premium</td>
+                        <td>1 Month</td>
+                        <td>$650</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section id="contact" class="section">
+        <div class="container">
+            <h2>Contact</h2>
+            <form id="contactForm" novalidate>
+                <div class="form-group">
+                    <label for="name">Name *</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email *</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone</label>
+                    <input type="tel" id="phone" name="phone">
+                </div>
+                <div class="form-group">
+                    <label for="message">Message *</label>
+                    <textarea id="message" name="message" rows="4" required></textarea>
+                </div>
+                <button type="submit">Send Message</button>
+                <p id="formMessage" class="form-message"></p>
+            </form>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Fast Self-Drive Services. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
 </body>
 </html>
