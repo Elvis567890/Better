@@ -1,22 +1,29 @@
-// script.js – handles the "Join Now" SMS action
-
+// Simple client‑side form handling
 document.addEventListener('DOMContentLoaded', function () {
-  const form = document.getElementById('joinForm');
-  const phoneInput = document.getElementById('phone');
+  const form = document.getElementById('contactForm');
+  const messageDiv = document.getElementById('formMessage');
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    const phone = phoneInput.value.trim();
-    if (!phone) {
-      alert('Please enter a valid phone number.');
+    // Basic validation (HTML5 already does it, but we add a quick check)
+    const name = form.name.value.trim();
+    const email = form.email.value.trim();
+    const message = form.message.value.trim();
+
+    if (!name || !email || !message) {
+      showMessage('Please fill in all fields.', 'error');
       return;
     }
 
-    // Build a simple SMS link. The body contains a placeholder join link.
-    const message = encodeURIComponent('Join Instant Drive Jobs: https://example.com/join?phone=' + encodeURIComponent(phone));
-    const smsLink = `sms:${phone}?body=${message}`;
-
-    // Try to open the SMS app. If the device cannot handle the scheme, fall back to an alert.
-    window.location.href = smsLink;
+    // Simulate sending data – in a real site you would POST to a server endpoint
+    setTimeout(() => {
+      showMessage('Thank you! Your message has been sent.', 'success');
+      form.reset();
+    }, 500);
   });
+
+  function showMessage(text, type) {
+    messageDiv.textContent = text;
+    messageDiv.style.color = type === 'error' ? '#c00' : '#080';
+  }
 });
