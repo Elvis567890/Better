@@ -1,18 +1,22 @@
-// Simple interactivity for demo purposes
+// script.js – handles the "Join Now" SMS action
 
 document.addEventListener('DOMContentLoaded', function () {
-  const downloadBtn = document.getElementById('downloadBtn');
-  const selectButtons = document.querySelectorAll('.selectBtn');
+  const form = document.getElementById('joinForm');
+  const phoneInput = document.getElementById('phone');
 
-  if (downloadBtn) {
-    downloadBtn.addEventListener('click', function () {
-      alert('Thank you! The download will be available soon.');
-    });
-  }
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const phone = phoneInput.value.trim();
+    if (!phone) {
+      alert('Please enter a valid phone number.');
+      return;
+    }
 
-  selectButtons.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      alert('You selected the ' + this.parentElement.querySelector('h3').textContent + ' plan.');
-    });
+    // Build a simple SMS link. The body contains a placeholder join link.
+    const message = encodeURIComponent('Join Instant Drive Jobs: https://example.com/join?phone=' + encodeURIComponent(phone));
+    const smsLink = `sms:${phone}?body=${message}`;
+
+    // Try to open the SMS app. If the device cannot handle the scheme, fall back to an alert.
+    window.location.href = smsLink;
   });
 });
