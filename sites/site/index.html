@@ -2,36 +2,102 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Instant Drive Jobs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fast &amp; Reliable Self‑Drive Services</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="hero">
-    <h1>Instant Drive Jobs</h1>
-    <p class="subtitle">Earn cash today with any vehicle you have</p>
+  <header>
+    <div class="container">
+      <h1>Fast &amp; Reliable Self‑Drive Services</h1>
+      <nav>
+        <ul>
+          <li><a href="#home">Home</a></li>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#rates">Rates</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </nav>
+    </div>
   </header>
 
   <main>
-    <section class="section">
-      <h2>How It Works</h2>
-      <p>1️⃣ Sign up in seconds 2️⃣ Get matched with high‑paying rides or deliveries 3️⃣ Get paid instantly via your preferred method</p>
+    <section id="home" class="section">
+      <div class="container">
+        <h2>Welcome to MySelfDrive Services</h2>
+        <p>Your trusted partner for hassle‑free self‑drive rentals.</p>
+      </div>
     </section>
 
-    <section class="section">
-      <h2>Why Choose Us?</h2>
-      <p>• No commissions • Same‑day payouts • Flexible schedule • Verified high‑pay gigs</p>
+    <section id="services" class="section">
+      <div class="container">
+        <h2>Our Services</h2>
+        <ul class="services-list">
+          <li>Daily Car Rentals</li>
+          <li>Weekly Packages</li>
+          <li>Long‑term Leasing</li>
+          <li>Corporate Fleet Solutions</li>
+        </ul>
+      </div>
     </section>
 
-    <section class="section get-started">
-      <h2>Get Started</h2>
-      <p>Enter your phone number below and we’ll text you a quick link to join.</p>
-      <form id="joinForm">
-        <input type="tel" id="phone" placeholder="e.g. +1 555 123 4567" required>
-        <button type="submit">Join Now</button>
-      </form>
+    <section id="rates" class="section">
+      <div class="container">
+        <h2>Rates</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Vehicle</th>
+              <th>Daily</th>
+              <th>Weekly</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Compact</td>
+              <td>$30</td>
+              <td>$180</td>
+            </tr>
+            <tr>
+              <td>Sedan</td>
+              <td>$45</td>
+              <td>$270</td>
+            </tr>
+            <tr>
+              <td>SUV</td>
+              <td>$70</td>
+              <td>$420</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="contact" class="section">
+      <div class="container">
+        <h2>Contact Us</h2>
+        <form id="contactForm">
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name" required>
+
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required>
+
+          <label for="message">Message</label>
+          <textarea id="message" name="message" rows="4" required></textarea>
+
+          <button type="submit">Send Message</button>
+          <div id="formMessage" class="form-message"></div>
+        </form>
+      </div>
     </section>
   </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Fast &amp; Reliable Self‑Drive Services</p>
+    </div>
+  </footer>
 
   <script src="script.js"></script>
 </body>
