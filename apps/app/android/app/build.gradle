@@ -3,7 +3,6 @@ plugins {
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
 }
-
 android {
     namespace = "com.boat.app"
     compileSdk = 34
@@ -28,5 +27,4 @@ android {
         }
     }
 }
-
 flutter { source = "../.." }
