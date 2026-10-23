@@ -1,3 +1,3 @@
-document.getElementById('cta').addEventListener('click', function(){
-    window.location.href='https://example.com/buy';
+document.getElementById('contactBtn').addEventListener('click', function(){
+  alert('Call us now: +1-800-FAST-CLEAN');
 });
