@@ -1,12 +1,12 @@
+/* Reset */
 * {margin:0;padding:0;box-sizing:border-box;}
-body,html {height:100%;font-family:Arial,Helvetica,sans-serif;}
-.hero {display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;background:linear-gradient(135deg,#4a90e2,#9013fe);color:#fff;text-align:center;padding:20px;}
-.hero h1 {font-size:3rem;margin-bottom:0.5rem;}
-.hero p {font-size:1.25rem;margin-bottom:1.5rem;max-width:600px;}
-#cta {background:#fff;color:#4a90e2;padding:0.75rem 1.5rem;border:none;border-radius:4px;font-size:1rem;cursor:pointer;transition:background 0.3s;}
-#cta:hover {background:#f0f0f0;}
-footer {text-align:center;padding:1rem;background:#f8f8f8;color:#555;}
-@media (max-width:600px){
-.hero h1 {font-size:2.2rem;}
-.hero p {font-size:1rem;}
+body {font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;min-height:100vh;}
+header,footer {background:#2c3e50;color:#fff;padding:1rem;text-align:center;}
+main {flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:2rem;}
+.tagline {font-size:1.5rem;margin-bottom:1.5rem;}
+button {background:#e67e22;color:#fff;border:none;padding:0.75rem 1.5rem;font-size:1rem;border-radius:4px;cursor:pointer;transition:background 0.3s;}
+button:hover {background:#d35400;}
+@media (max-width:600px) {
+  .tagline {font-size:1.2rem;}
+  button {width:100%;max-width:300px;}
 }
