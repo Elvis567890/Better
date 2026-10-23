@@ -1,1 +1,12 @@
-/* Reset & basic styles */\n* {\n  margin: 0;\n  padding: 0;\n  box-sizing: border-box;\n}\n\nbody {\n  font-family: Arial, Helvetica, sans-serif;\n  line-height: 1.6;\n  color: #333;\n  background-color: #f9f9f9;\n}\n\n/* Layout */\nheader.hero {\n  background: linear-gradient(135deg, #0066ff, #33ccff);\n  color: #fff;\n  text-align: center;\n  padding: 4rem 1rem;\n}\nheader.hero h1 {\n  font-size: 2.5rem;\n  margin-bottom: 1rem;\n}\nheader.hero p {\n  font-size: 1.2rem;\n  margin-bottom: 2rem;\n}\n.cta-button {\n  display: inline-block;\n  background-color: #ffcc00;\n  color: #333;\n  padding: 0.75rem 1.5rem;\n  text-decoration: none;\n  font-weight: bold;\n  border-radius: 4px;\n  transition: background 0.3s;\n}\n.cta-button:hover {\n  background-color: #e6b800;\n}\n\n/* Booking form */\nsection.booking-section {\n  max-width: 600px;\n  margin: 3rem auto;\n  background: #fff;\n  padding: 2rem;\n  border-radius: 8px;\n  box-shadow: 0 2px 8px rgba(0,0,0,0.1);\n}\nsection.booking-section h2 {\n  text-align: center;\n  margin-bottom: 1.5rem;\n}\nform .form-group {\n  margin-bottom: 1rem;\n}\nform label {\n  display: block;\n  margin-bottom: 0.3rem;\n}\nform input {\n  width: 100%;\n  padding: 0.5rem;\n  border: 1px solid #ccc;\n  border-radius: 4px;\n}\nform button {\n  width: 100%;\n  padding: 0.75rem;\n  background-color: #0066ff;\n  color: #fff;\n  border: none;\n  border-radius: 4px;\n  font-size: 1rem;\n  cursor: pointer;\n  transition: background 0.3s;\n}\nform button:hover {\n  background-color: #0052cc;\n}\n\n/* Footer */\nfooter.footer {\n  background-color: #333;\n  color: #fff;\n  text-align: center;\n  padding: 1rem;\n  margin-top: 2rem;\n}\nfooter.footer a {\n  color: #ffcc00;\n  text-decoration: none;\n}\n\n/* Responsive */\n@media (max-width: 600px) {\n  header.hero h1 {\n    font-size: 2rem;\n  }\n  header.hero p {\n    font-size: 1rem;\n  }\n}\n
+* {margin:0;padding:0;box-sizing:border-box;}
+body,html {height:100%;font-family:Arial,Helvetica,sans-serif;}
+.hero {display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;background:linear-gradient(135deg,#4a90e2,#9013fe);color:#fff;text-align:center;padding:20px;}
+.hero h1 {font-size:3rem;margin-bottom:0.5rem;}
+.hero p {font-size:1.25rem;margin-bottom:1.5rem;max-width:600px;}
+#cta {background:#fff;color:#4a90e2;padding:0.75rem 1.5rem;border:none;border-radius:4px;font-size:1rem;cursor:pointer;transition:background 0.3s;}
+#cta:hover {background:#f0f0f0;}
+footer {text-align:center;padding:1rem;background:#f8f8f8;color:#555;}
+@media (max-width:600px){
+.hero h1 {font-size:2.2rem;}
+.hero p {font-size:1rem;}
+}
