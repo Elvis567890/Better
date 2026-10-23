@@ -1,22 +1,94 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fast Clean Service</title>
-<link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Earn Money Driving Anywhere Today</title>
+    <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<header>
-<h1>Fast Clean Service</h1>
-</header>
-<main>
-<p class="tagline">24h cleaning available</p>
-<button id="contactBtn">Contact Us</button>
-</main>
-<footer>
-<p>&copy; 2026 Fast Clean Service</p>
-</footer>
-<script src="script.js"></script>
+    <header id="top" class="hero">
+        <h1>Earn Money Driving Anywhere Today</h1>
+        <p class="subtitle">Turn your car into a cash‑machine in minutes.</p>
+        <a href="#start" class="cta-button">Start Earning Now</a>
+    </header>
+
+    <main>
+        <!-- Why Drive? -->
+        <section class="section" id="why">
+            <h2>Why Drive?</h2>
+            <p>Flexible hours, instant payouts, use your own car.</p>
+        </section>
+
+        <!-- Top Platforms -->
+        <section class="section" id="platforms">
+            <h2>Top Platforms</h2>
+            <ul>
+                <li>Uber / Lyft – passenger rides</li>
+                <li>DoorDash / Uber Eats – food delivery</li>
+                <li>Amazon Flex – package delivery</li>
+                <li>Instacart – grocery delivery</li>
+                <li>Local courier apps</li>
+            </ul>
+        </section>
+
+        <!-- Get Started -->
+        <section class="section" id="start">
+            <h2>Get Started in 5 Minutes</h2>
+            <ol>
+                <li>Choose a platform that fits your schedule.</li>
+                <li>Sign up using the links below.</li>
+                <li>Complete the quick background check.</li>
+                <li>Download the driver app.</li>
+                <li>Start accepting rides or deliveries.</li>
+            </ol>
+            <div class="links">
+                <a href="https://www.uber.com/drive/" target="_blank" rel="noopener">Uber</a>
+                <a href="https://www.lyft.com/driver" target="_blank" rel="noopener">Lyft</a>
+                <a href="https://www.doordash.com/dashers/" target="_blank" rel="noopener">DoorDash</a>
+                <a href="https://www.ubereats.com/deliver" target="_blank" rel="noopener">Uber Eats</a>
+                <a href="https://flex.amazon.com/" target="_blank" rel="noopener">Amazon Flex</a>
+                <a href="https://www.instacart.com/deliver" target="_blank" rel="noopener">Instacart</a>
+            </div>
+        </section>
+
+        <!-- Earn Calculator -->
+        <section class="section" id="calculator">
+            <h2>Earn Calculator</h2>
+            <p>Estimate $20–$35 per hour depending on city and time.</p>
+            <div class="calc">
+                <label for="hours">Hours per week:</label>
+                <input type="number" id="hours" min="0" value="10" />
+                <label for="rate">Rate ($/hr):</label>
+                <select id="rate">
+                    <option value="20">$20</option>
+                    <option value="25">$25</option>
+                    <option value="30">$30</option>
+                    <option value="35">$35</option>
+                </select>
+                <button id="calcBtn">Calculate</button>
+                <p class="result" id="calcResult"></p>
+            </div>
+        </section>
+
+        <!-- Contact -->
+        <section class="section" id="contact">
+            <h2>Contact Me for Help</h2>
+            <p>If you need assistance with sign‑up or vehicle prep, message me via WhatsApp.</p>
+            <form id="contactForm">
+                <input type="text" name="name" placeholder="Your Name" required />
+                <input type="email" name="email" placeholder="Your Email" required />
+                <textarea name="message" rows="4" placeholder="Your Message" required></textarea>
+                <button type="submit">Send Message</button>
+            </form>
+            <p class="whatsapp"><a href="https://wa.me/1234567890" target="_blank" rel="noopener">Chat on WhatsApp</a></p>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Earn Money Driving Anywhere. All rights reserved.</p>
+    </footer>
+
+    <script src="script.js"></script>
 </body>
 </html>
