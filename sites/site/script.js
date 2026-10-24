@@ -1,18 +1,31 @@
-document.addEventListener('DOMContentLoaded', () => {
-  // Mobile navigation toggle
-  const toggleBtn = document.querySelector('.nav-toggle');
-  const navList = document.querySelector('nav ul');
-  toggleBtn.addEventListener('click', () => {
-    navList.classList.toggle('show');
+document.addEventListener('DOMContentLoaded', function () {
+  const navToggle = document.getElementById('navToggle');
+  const nav = document.getElementById('nav');
+
+  navToggle.addEventListener('click', function () {
+    nav.querySelector('ul').classList.toggle('show');
   });
 
-  // Simple contact form feedback
   const form = document.getElementById('contactForm');
-  const messageEl = document.getElementById('formMessage');
-  form.addEventListener('submit', (e) => {
+  const formMessage = document.getElementById('formMessage');
+
+  form.addEventListener('submit', function (e) {
     e.preventDefault();
-    // In a real site you would send the data via fetch/AJAX.
-    messageEl.textContent = 'Thank you, your message has been sent.';
+
+    // Simple validation
+    const name = form.name.value.trim();
+    const email = form.email.value.trim();
+    const service = form.service.value;
+
+    if (!name || !email || !service) {
+      formMessage.textContent = 'Please fill in all required fields.';
+      formMessage.style.color = 'red';
+      return;
+    }
+
+    // Simulate successful submission
+    formMessage.textContent = 'Thank you! Your request has been sent.';
+    formMessage.style.color = 'green';
     form.reset();
   });
 });
