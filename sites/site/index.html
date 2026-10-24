@@ -3,84 +3,114 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Freelance Portfolio</title>
+  <title>MyGigProfile</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
+  <header class="header">
     <div class="container">
-      <h1>Freelance Portfolio</h1>
-      <nav id="nav">
+      <h1 class="logo">MyGigProfile</h1>
+      <nav class="nav" id="nav">
         <ul>
-          <li><a href="#home">Home</a></li>
           <li><a href="#services">Services</a></li>
-          <li><a href="#portfolio">Portfolio</a></li>
+          <li><a href="#pricing">Pricing</a></li>
           <li><a href="#contact">Contact</a></li>
         </ul>
-        <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
       </nav>
+      <button class="nav-toggle" id="navToggle">&#9776;</button>
     </div>
   </header>
 
-  <main>
-    <section id="home" class="section hero">
-      <div class="container">
-        <h2>Welcome!</h2>
-        <p>Writing, Design, Programming Services</p>
-        <a href="#contact" class="btn">Get in Touch</a>
-      </div>
-    </section>
+  <section class="hero">
+    <div class="container">
+      <h2>Professional Self‑Drive Services</h2>
+      <p>Reliable, safe, and affordable rides tailored to your needs.</p>
+      <a href="#contact" class="btn-primary">Book a Ride</a>
+    </div>
+  </section>
 
-    <section id="services" class="section">
-      <div class="container">
-        <h2>Services</h2>
-        <div class="services-grid">
-          <div class="service">
-            <h3>Writing</h3>
-            <p>Creative and technical writing for blogs, articles, copywriting, and more.</p>
-          </div>
-          <div class="service">
-            <h3>Design</h3>
-            <p>Graphic, UI/UX, and branding design to make your vision stand out.</p>
-          </div>
-          <div class="service">
-            <h3>Programming</h3>
-            <p>Full‑stack development, automation scripts, and custom software solutions.</p>
-          </div>
+  <section id="services" class="services">
+    <div class="container">
+      <h2>Our Services</h2>
+      <div class="service-list">
+        <div class="service-item">
+          <h3>City Commute</h3>
+          <p>Quick and comfortable rides within the city limits.</p>
+        </div>
+        <div class="service-item">
+          <h3>Airport Transfer</h3>
+          <p>Punctual pickups and drop‑offs for all major airports.</p>
+        </div>
+        <div class="service-item">
+          <h3>Long‑Distance Trips</h3>
+          <p>Enjoy scenic routes with a professional driver.</p>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="portfolio" class="section">
-      <div class="container">
-        <h2>Portfolio</h2>
-        <p>Coming soon...</p>
-      </div>
-    </section>
-
-    <section id="contact" class="section">
-      <div class="container">
-        <h2>Contact Me</h2>
-        <form id="contactForm">
-          <label for="name">Name</label>
-          <input type="text" id="name" name="name" required>
-
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email" required>
-
-          <label for="message">Message</label>
-          <textarea id="message" name="message" rows="5" required></textarea>
-
-          <button type="submit" class="btn">Send Message</button>
-          <p id="formMessage" class="form-message"></p>
-        </form>
-      </div>
-    </section>
-  </main>
-
-  <footer>
+  <section id="pricing" class="pricing">
     <div class="container">
-      <p>&copy; 2026 Freelance Portfolio. All rights reserved.</p>
+      <h2>Pricing</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Rate (per km)</th>
+            <th>Base Fee</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>City Commute</td>
+            <td>$0.80</td>
+            <td>$5.00</td>
+          </tr>
+          <tr>
+            <td>Airport Transfer</td>
+            <td>$1.20</td>
+            <td>$10.00</td>
+          </tr>
+          <tr>
+            <td>Long‑Distance Trips</td>
+            <td>$1.00</td>
+            <td>$15.00</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="contact" class="contact">
+    <div class="container">
+      <h2>Contact &amp; Booking</h2>
+      <form id="contactForm">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" required>
+
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required>
+
+        <label for="service">Service</label>
+        <select id="service" name="service" required>
+          <option value="">Select a service</option>
+          <option>City Commute</option>
+          <option>Airport Transfer</option>
+          <option>Long‑Distance Trips</option>
+        </select>
+
+        <label for="message">Message / Details</label>
+        <textarea id="message" name="message" rows="4"></textarea>
+
+        <button type="submit" class="btn-primary">Send Request</button>
+      </form>
+      <div id="formMessage" class="form-message"></div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2026 MyGigProfile. All rights reserved.</p>
     </div>
   </footer>
 
