@@ -1,79 +1,57 @@
 # Doc
 
-## Quick Service Proposal
+## Proposal Template
 
-### 1. Executive Summary
-We propose a fast‑track service solution designed to meet your immediate operational needs while laying the groundwork for long‑term growth. Our approach combines rapid deployment, high‑quality deliverables, and flexible support to ensure your organization can achieve its goals without delay.
+### Services
+Our comprehensive suite of services is designed to meet your business needs and drive measurable results.
 
-### 2. Objectives
-- **Accelerate Time‑to‑Market:** Deliver core functionalities within 4 weeks.  
-- **Ensure Quality:** Meet or exceed industry standards for reliability and performance.  
-- **Enable Scalability:** Build a foundation that supports future expansion and feature additions.  
-- **Provide Transparent Communication:** Maintain weekly status updates and a dedicated point of contact.
+| Service | Description | Deliverables |
+|---------|-------------|--------------|
+| **Consulting** | Strategic analysis and roadmap development | Detailed strategy document, KPI framework |
+| **Design** | UI/UX design for web and mobile platforms | Wireframes, high‑fidelity mockups, design system |
+| **Development** | Full‑stack development using modern technologies | Source code, API documentation, deployment scripts |
+| **Marketing** | Digital marketing campaigns and analytics | Campaign plan, performance reports, optimization recommendations |
+| **Support** | Ongoing maintenance and technical support | SLA agreement, support tickets, regular updates |
 
-### 3. Scope of Work
-| Phase | Description | Deliverables | Duration |
-|-------|-------------|--------------|----------|
-| **Phase 1 – Discovery** | Gather requirements, assess current environment, define success metrics. | Requirements Document, Project Plan | 1 week |
-| **Phase 2 – Design** | Create solution architecture, UI/UX mockups, and technical specifications. | Architecture Diagram, Wireframes, Technical Spec | 1 week |
-| **Phase 3 – Development** | Build core features, integrate with existing systems, perform unit testing. | Working Prototype, Source Code Repository | 2 weeks |
-| **Phase 4 – Testing & QA** | Conduct functional, performance, and security testing; address defects. | Test Reports, Signed-off Release Candidate | 1 week |
-| **Phase 5 – Deployment & Training** | Deploy to production, provide user training, handover documentation. | Live System, Training Materials, Operations Guide | 1 week |
+*All services can be customized to align with your specific objectives and budget.*
 
-### 4. Deliverables
-- Detailed Requirements Document  
-- Project Plan with milestones and risk register  
-- Architecture & Design artifacts  
-- Fully functional prototype and final production system  
-- Test plans, test cases, and test results  
-- User manuals, admin guides, and training sessions  
-- Post‑deployment support plan (30‑day warranty)
+---
 
-### 5. Timeline
-| Milestone | Target Date |
-|-----------|-------------|
-| Project Kick‑off | Week 1, Day 1 |
-| Requirements Sign‑off | End of Week 1 |
-| Design Sign‑off | End of Week 2 |
-| Development Complete | End of Week 4 |
-| QA Sign‑off | End of Week 5 |
-| Production Deployment | End of Week 6 |
-| Training & Handover | Week 6, Day 5 |
-| Warranty End | Week 10 |
+### Pricing
+We offer transparent, tiered pricing models to provide flexibility and value.
 
-### 6. Pricing
-| Item | Cost (USD) |
-|------|------------|
-| Discovery & Design | $8,000 |
-| Development | $22,000 |
-| Testing & QA | $5,000 |
-| Deployment & Training | $4,000 |
-| 30‑Day Warranty Support | $3,000 |
-| **Total** | **$42,000** |
+| Tier | Monthly Cost | Included Services | Additional Benefits |
+|------|--------------|-------------------|---------------------|
+| **Basic** | $2,500 | Consulting, Design (up to 2 pages) | Email support |
+| **Standard** | $5,000 | Consulting, Design (up to 5 pages), Development (up to 50 hrs) | Phone support, monthly performance review |
+| **Premium** | $9,500 | All Standard services + Development (up to 120 hrs), Marketing (up to 3 campaigns) | Dedicated account manager, priority support, quarterly strategy workshop |
+| **Enterprise** | Custom | Tailored suite of all services | SLA with 24/7 support, on‑site training, custom integrations |
 
-*All prices are fixed‑price, inclusive of taxes. Travel and accommodation, if required, will be billed separately at cost.*
+*All prices are exclusive of taxes. Discounts are available for annual commitments.*
 
-### 7. Terms & Conditions
-1. **Payment Schedule**  
-   - 30% upfront upon signing the agreement.  
-   - 40% upon delivery of the Development phase.  
-   - 30% upon successful deployment and acceptance.
+---
 
-2. **Change Requests**  
-   - Any scope changes after sign‑off will be handled via a formal Change Order and may affect schedule and cost.
+### Timeline
+A clear, phased timeline ensures timely delivery and alignment with your milestones.
 
-3. **Confidentiality**  
-   - Both parties agree to keep all proprietary information confidential.
+| Phase | Duration | Key Activities | Milestones |
+|-------|----------|----------------|------------|
+| **1. Discovery** | 2 weeks | Stakeholder interviews, requirement gathering, market research | Signed project charter |
+| **2. Planning** | 1 week | Scope definition, resource allocation, project schedule | Approved project plan |
+| **3. Design** | 3 weeks | Wireframes, UI mockups, design review cycles | Final design approval |
+| **4. Development** | 6–8 weeks* | Front‑end & back‑end coding, integration, QA testing | Feature complete demo |
+| **5. Testing & QA** | 2 weeks | User acceptance testing, bug fixing, performance optimization | Sign‑off on QA |
+| **6. Launch** | 1 week | Deployment, training, go‑live support | Live product |
+| **7. Post‑Launch** | Ongoing | Monitoring, support, iterative improvements | Monthly performance reports |
 
-4. **Intellectual Property**  
-   - All deliverables become the exclusive property of the client upon final payment.
+\*Development duration may vary based on selected tier and scope.
 
-5. **Termination**  
-   - Either party may terminate with 15 days written notice. Fees for work completed up to termination will be invoiced.
+**Key Dates (example)**  
+- Project kickoff: **May 15, 2026**  
+- Design sign‑off: **June 12, 2026**  
+- Beta release: **July 24, 2026**  
+- Full launch: **August 7, 2026**
 
-### 8. Acceptance
-By signing below, the client acknowledges acceptance of the proposal, scope, timeline, pricing, and terms outlined above.
+---
 
-**Client Representative:** _______________________   **Date:** ___________
-
-**Provider Representative:** _______________________   **Date:** ___________
+*We are committed to delivering high‑quality results on schedule. Adjustments to the timeline will be communicated promptly, with stakeholder approval obtained for any changes.*
