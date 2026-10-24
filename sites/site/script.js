@@ -1,20 +1,17 @@
-document.addEventListener('DOMContentLoaded', function () {
-    const navToggle = document.getElementById('nav-toggle');
-    const navList = document.querySelector('.nav-list');
+document.addEventListener('DOMContentLoaded', () => {
+  const nav = document.getElementById('nav');
+  const toggle = document.getElementById('navToggle');
 
-    navToggle.addEventListener('click', function () {
-        navList.classList.toggle('show');
-        // Animate hamburger
-        this.classList.toggle('active');
-    });
+  // Mobile navigation toggle
+  toggle.addEventListener('click', () => {
+    nav.classList.toggle('show');
+  });
 
-    // Close menu when a link is clicked (mobile)
-    document.querySelectorAll('.nav-list a').forEach(link => {
-        link.addEventListener('click', () => {
-            if (navList.classList.contains('show')) {
-                navList.classList.remove('show');
-                navToggle.classList.remove('active');
-            }
-        });
-    });
+  // Simple contact form handling
+  const form = document.getElementById('contactForm');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    alert('Thank you, your message has been sent!');
+    form.reset();
+  });
 });
