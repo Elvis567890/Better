@@ -1,21 +1,17 @@
-# Doc
+# Doc  
 
-## Driver Resume
+## Earn Money Driving Today  
 
-### Summary
-Experienced driver with clean record, excellent customer service, and flexible availability.
+**Available for rideshare and local deliveries.** Fast, safe, and reliable. Sign up now and start earning within minutes. Flexible hours, cash‑out daily.  
 
-### Experience
-| Role               | Company | Duration |
-|--------------------|---------|----------|
-| Ride‑share driver  | Uber    | 2 years  |
-| Delivery driver    | DoorDash| 1 year   |
+- No vehicle ownership required (use your own car)  
+- Immediate onboarding  
+- Competitive rates  
 
-### Skills
-- Navigation  
-- Customer Service  
-- Vehicle Maintenance  
+---  
 
-### Certifications
-- Valid Driver's License  
-- Background Check Clearance
+**Call or text to get started!**  
+
+**Contact Information**  
+- **Phone:** +1234567890  
+- **Email:** youremail@example.com  
