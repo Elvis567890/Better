@@ -1,31 +1,20 @@
 document.addEventListener('DOMContentLoaded', function () {
-  const navToggle = document.getElementById('navToggle');
-  const nav = document.getElementById('nav');
+    const navToggle = document.getElementById('nav-toggle');
+    const navList = document.querySelector('.nav-list');
 
-  navToggle.addEventListener('click', function () {
-    nav.querySelector('ul').classList.toggle('show');
-  });
+    navToggle.addEventListener('click', function () {
+        navList.classList.toggle('show');
+        // Animate hamburger
+        this.classList.toggle('active');
+    });
 
-  const form = document.getElementById('contactForm');
-  const formMessage = document.getElementById('formMessage');
-
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-
-    // Simple validation
-    const name = form.name.value.trim();
-    const email = form.email.value.trim();
-    const service = form.service.value;
-
-    if (!name || !email || !service) {
-      formMessage.textContent = 'Please fill in all required fields.';
-      formMessage.style.color = 'red';
-      return;
-    }
-
-    // Simulate successful submission
-    formMessage.textContent = 'Thank you! Your request has been sent.';
-    formMessage.style.color = 'green';
-    form.reset();
-  });
+    // Close menu when a link is clicked (mobile)
+    document.querySelectorAll('.nav-list a').forEach(link => {
+        link.addEventListener('click', () => {
+            if (navList.classList.contains('show')) {
+                navList.classList.remove('show');
+                navToggle.classList.remove('active');
+            }
+        });
+    });
 });
