@@ -1,1 +1,25 @@
-// Navigation toggle for mobile\nconst navToggle = document.querySelector('.nav-toggle');\nconst navLinks = document.querySelector('.nav-links');\n\nnavToggle.addEventListener('click', () => {\n  navLinks.classList.toggle('open');\n});\n\n// Simple form validation and feedback\nconst form = document.getElementById('contactForm');\nconst formMessage = document.getElementById('formMessage');\n\nform.addEventListener('submit', function(e) {\n  e.preventDefault();\n  const name = document.getElementById('name').value.trim();\n  const email = document.getElementById('email').value.trim();\n  const message = document.getElementById('message').value.trim();\n\n  if (!name || !email || !message) {\n    formMessage.textContent = 'Please fill in all fields.';\n    formMessage.style.color = 'red';\n    return;\n  }\n  // Basic email pattern\n  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;\n  if (!emailPattern.test(email)) {\n    formMessage.textContent = 'Please enter a valid email address.';\n    formMessage.style.color = 'red';\n    return;\n  }\n\n  // Simulate successful submission\n  formMessage.textContent = 'Thank you, ' + name + '! Your message has been sent.';\n  formMessage.style.color = 'green';\n  form.reset();\n});
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('signupForm');
+    const messageDiv = document.getElementById('message');
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        // Simple client‑side validation
+        const name = form.name.value.trim();
+        const email = form.email.value.trim();
+        const phone = form.phone.value.trim();
+
+        if (!name || !email || !phone) {
+            showMessage('Please fill in all fields.', 'error');
+            return;
+        }
+        // Simulate successful submission
+        showMessage('Thank you, ' + name + '! Your information has been received.', 'success');
+        form.reset();
+    });
+
+    function showMessage(msg, type) {
+        messageDiv.textContent = msg;
+        messageDiv.style.color = type === 'success' ? 'green' : 'red';
+    }
+});
