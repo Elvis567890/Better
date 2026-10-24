@@ -1,1 +1,89 @@
-<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>My Freelance Portfolio</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n<header class=\"header\">\n  <h1>My Freelance Portfolio</h1>\n  <nav class=\"nav\">\n    <a href=\"#services\">Services</a>\n    <a href=\"#contact\">Contact</a>\n  </nav>\n</header>\n\n<section class=\"hero\">\n  <h2>Offering writing, design, and programming services</h2>\n  <p>Professional, reliable, and creative solutions for your projects.</p>\n  <a href=\"#contact\" class=\"btn\">Get in Touch</a>\n</section>\n\n<section id=\"services\" class=\"services\">\n  <h2>My Services</h2>\n  <div class=\"service-cards\">\n    <div class=\"card\">\n      <h3>Writing</h3>\n      <p>Copywriting, blog posts, technical documentation, and more.</p>\n    </div>\n    <div class=\"card\">\n      <h3>Design</h3>\n      <p>Graphic design, UI/UX, branding, and visual assets.</p>\n    </div>\n    <div class=\"card\">\n      <h3>Programming</h3>\n      <p>Web development, automation scripts, and custom software.</p>\n    </div>\n  </div>\n</section>\n\n<section id=\"contact\" class=\"contact\">\n  <h2>Contact Me</h2>\n  <form id=\"contactForm\">\n    <input type=\"text\" name=\"name\" placeholder=\"Your Name\" required>\n    <input type=\"email\" name=\"email\" placeholder=\"Your Email\" required>\n    <textarea name=\"message\" placeholder=\"Your Message\" rows=\"5\" required></textarea>\n    <button type=\"submit\" class=\"btn\">Send Message</button>\n  </form>\n  <p id=\"formMessage\" class=\"form-message\"></p>\n</section>\n\n<footer class=\"footer\">\n  <p>&copy; 2026 My Freelance Portfolio</p>\n</footer>\n\n<script src=\"script.js\"></script>\n</body>\n</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Freelance Portfolio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>Freelance Portfolio</h1>
+      <nav id="nav">
+        <ul>
+          <li><a href="#home">Home</a></li>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#portfolio">Portfolio</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+        <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="home" class="section hero">
+      <div class="container">
+        <h2>Welcome!</h2>
+        <p>Writing, Design, Programming Services</p>
+        <a href="#contact" class="btn">Get in Touch</a>
+      </div>
+    </section>
+
+    <section id="services" class="section">
+      <div class="container">
+        <h2>Services</h2>
+        <div class="services-grid">
+          <div class="service">
+            <h3>Writing</h3>
+            <p>Creative and technical writing for blogs, articles, copywriting, and more.</p>
+          </div>
+          <div class="service">
+            <h3>Design</h3>
+            <p>Graphic, UI/UX, and branding design to make your vision stand out.</p>
+          </div>
+          <div class="service">
+            <h3>Programming</h3>
+            <p>Full‑stack development, automation scripts, and custom software solutions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="portfolio" class="section">
+      <div class="container">
+        <h2>Portfolio</h2>
+        <p>Coming soon...</p>
+      </div>
+    </section>
+
+    <section id="contact" class="section">
+      <div class="container">
+        <h2>Contact Me</h2>
+        <form id="contactForm">
+          <label for="name">Name</label>
+          <input type="text" id="name" name="name" required>
+
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" required>
+
+          <label for="message">Message</label>
+          <textarea id="message" name="message" rows="5" required></textarea>
+
+          <button type="submit" class="btn">Send Message</button>
+          <p id="formMessage" class="form-message"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Freelance Portfolio. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
