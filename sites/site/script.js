@@ -1,17 +1,17 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const nav = document.getElementById('nav');
-  const toggle = document.getElementById('navToggle');
-
-  // Mobile navigation toggle
-  toggle.addEventListener('click', () => {
-    nav.classList.toggle('show');
-  });
-
-  // Simple contact form handling
-  const form = document.getElementById('contactForm');
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    alert('Thank you, your message has been sent!');
-    form.reset();
+document.addEventListener('DOMContentLoaded', function () {
+  const questions = document.querySelectorAll('.faq-question');
+  questions.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const answer = btn.nextElementSibling;
+      const isOpen = answer.style.display === 'block';
+      // Close all answers first
+      document.querySelectorAll('.faq-answer').forEach(function (el) {
+        el.style.display = 'none';
+      });
+      // Toggle current answer
+      if (!isOpen) {
+        answer.style.display = 'block';
+      }
+    });
   });
 });
