@@ -2,53 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Earn Money Anywhere Today – Self‑Drive Gig Hub</title>
-  <link rel="icon" href="https://example.com/favicon.ico">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital Product Hub</title>
   <link rel="stylesheet" href="style.css">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-  <header class="site-header">
-    <img src="https://example.com/logo.png" alt="Self‑Drive Gig Hub Logo" class="logo">
-    <h1>Earn Money Anywhere Today – Self‑Drive Gig Hub</h1>
+  <header>
+    <h1>Digital Product Hub</h1>
+    <nav>
+      <a href="#">Home</a>
+      <a href="#">Products</a>
+      <a href="#">Cart (<span id="cart-count">0</span>)</a>
+    </nav>
   </header>
+  <main id="product-list"></main>
 
-  <section class="hero">
-    <h2>Start Earning with Your Car Right Now</h2>
-    <p>Ride‑hailing, delivery, rentals &amp; more – pick the gig that fits your schedule.</p>
-  </section>
-
-  <section class="content">
-    <h3>Top Self‑Drive Opportunities</h3>
-    <ul>
-      <li>Uber / Lyft – Ride‑hailing</li>
-      <li>DoorDash / Uber Eats – Food delivery</li>
-      <li>Amazon Flex – Package delivery</li>
-      <li>Turo – Car rentals</li>
-      <li>TaskRabbit – Moving &amp; hauling</li>
-    </ul>
-  </section>
-
-  <section class="cta" id="guide-download">
-    <h3>Download the free step‑by‑step guide</h3>
-    <a href="#" class="btn">Get the Guide</a>
-  </section>
-
-  <section class="faq">
-    <h3>Frequently Asked Questions</h3>
-    <div class="faq-item">
-      <button class="faq-question">Do I need a brand‑new car?</button>
-      <div class="faq-answer">Most platforms accept vehicles up to 10‑15 years old that meet their safety standards.</div>
+  <!-- Modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <div id="modal-body"></div>
+      <button id="add-to-cart">Add to Cart</button>
     </div>
-    <div class="faq-item">
-      <button class="faq-question">How quickly can I start earning?</button>
-      <div class="faq-answer">After completing the sign‑up and background check, many drivers start within 24‑48 hours.</div>
-    </div>
-  </section>
-
-  <footer class="site-footer">
-    <p>&copy; 2024 Self‑Drive Gig Hub. All rights reserved.</p>
-  </footer>
+  </div>
 
   <script src="script.js"></script>
 </body>
