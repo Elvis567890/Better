@@ -1,46 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Freelance Portfolio</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Showcase my services">
+  <title>Freelance Portfolio</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <h1>Freelance Portfolio</h1>
-  <nav>
-    <ul>
-      <li><a href="#" data-page="home">Home</a></li>
-      <li><a href="#" data-page="portfolio">Portfolio</a></li>
-      <li><a href="#" data-page="contact">Contact</a></li>
-    </ul>
-  </nav>
-</header>
-<main>
-  <section id="home" class="page active">
-    <h2>Home</h2>
-    <p>Welcome to my portfolio.</p>
-  </section>
-  <section id="portfolio" class="page">
-    <h2>Portfolio</h2>
-    <p>Projects and case studies.</p>
-  </section>
-  <section id="contact" class="page">
-    <h2>Contact</h2>
-    <p>Get in touch.</p>
-    <form id="contactForm">
-      <label>Name<input type="text" name="name" required></label>
-      <label>Email<input type="email" name="email" required></label>
-      <label>Message<textarea name="message" required></textarea></label>
-      <button type="submit">Send</button>
-    </form>
-    <div id="formMessage"></div>
-  </section>
-</main>
-<footer>
-  <p>&copy; <span id="year"></span> Freelance Portfolio</p>
-</footer>
-<script src="script.js"></script>
+  <header>
+    <div class="container">
+      <h1>Freelance Portfolio</h1>
+      <nav>
+        <ul id="nav">
+          <li><a href="#home">Home</a></li>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#portfolio">Portfolio</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+        <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="home" class="section">
+      <div class="container">
+        <h2>Welcome to my portfolio</h2>
+      </div>
+    </section>
+
+    <section id="services" class="section">
+      <div class="container">
+        <h2>Services</h2>
+        <p>Graphic Design, Copywriting, Data Entry</p>
+      </div>
+    </section>
+
+    <section id="portfolio" class="section">
+      <div class="container">
+        <h2>Portfolio</h2>
+        <p>Sample works</p>
+      </div>
+    </section>
+
+    <section id="contact" class="section">
+      <div class="container">
+        <h2>Contact</h2>
+        <p>Contact me at <a href="mailto:email@example.com">email@example.com</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Freelance Portfolio</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
 </body>
 </html>
