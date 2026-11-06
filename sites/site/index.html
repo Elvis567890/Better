@@ -1,31 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Digital Product Hub</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freelance Portfolio</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>Digital Product Hub</h1>
-    <nav>
-      <a href="#">Home</a>
-      <a href="#">Products</a>
-      <a href="#">Cart (<span id="cart-count">0</span>)</a>
-    </nav>
-  </header>
-  <main id="product-list"></main>
-
-  <!-- Modal -->
-  <div id="modal" class="modal hidden">
-    <div class="modal-content">
-      <span class="close">&times;</span>
-      <div id="modal-body"></div>
-      <button id="add-to-cart">Add to Cart</button>
-    </div>
-  </div>
-
-  <script src="script.js"></script>
+<header>
+  <h1>Freelance Portfolio</h1>
+  <nav>
+    <ul>
+      <li><a href="#" data-page="home">Home</a></li>
+      <li><a href="#" data-page="portfolio">Portfolio</a></li>
+      <li><a href="#" data-page="contact">Contact</a></li>
+    </ul>
+  </nav>
+</header>
+<main>
+  <section id="home" class="page active">
+    <h2>Home</h2>
+    <p>Welcome to my portfolio.</p>
+  </section>
+  <section id="portfolio" class="page">
+    <h2>Portfolio</h2>
+    <p>Projects and case studies.</p>
+  </section>
+  <section id="contact" class="page">
+    <h2>Contact</h2>
+    <p>Get in touch.</p>
+    <form id="contactForm">
+      <label>Name<input type="text" name="name" required></label>
+      <label>Email<input type="email" name="email" required></label>
+      <label>Message<textarea name="message" required></textarea></label>
+      <button type="submit">Send</button>
+    </form>
+    <div id="formMessage"></div>
+  </section>
+</main>
+<footer>
+  <p>&copy; <span id="year"></span> Freelance Portfolio</p>
+</footer>
+<script src="script.js"></script>
 </body>
 </html>
