@@ -1,63 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Showcase my services">
-  <title>Freelance Portfolio</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Self‑Drive Boat Services</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <div class="container">
-      <h1>Freelance Portfolio</h1>
-      <nav>
-        <ul id="nav">
-          <li><a href="#home">Home</a></li>
-          <li><a href="#services">Services</a></li>
-          <li><a href="#portfolio">Portfolio</a></li>
-          <li><a href="#contact">Contact</a></li>
-        </ul>
-        <button class="nav-toggle" aria-label="Toggle navigation">&#9776;</button>
-      </nav>
-    </div>
-  </header>
+    <header class="site-header">
+        <div class="container">
+            <h1 class="logo"><a href="#">BoatGo</a></h1>
+            <nav class="nav" id="nav">
+                <ul class="nav-list">
+                    <li><a href="#services">Services</a></li>
+                    <li><a href="#booking">Book Now</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </nav>
+            <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+                <span class="hamburger"></span>
+            </button>
+        </div>
+    </header>
 
-  <main>
-    <section id="home" class="section">
-      <div class="container">
-        <h2>Welcome to my portfolio</h2>
-      </div>
+    <section class="hero">
+        <div class="container">
+            <h2>Explore the Waters on Your Own Terms</h2>
+            <p>Rent a boat, set your own schedule, and enjoy the freedom of the open water.</p>
+            <a href="#booking" class="btn-primary">Book Your Boat</a>
+        </div>
     </section>
 
-    <section id="services" class="section">
-      <div class="container">
-        <h2>Services</h2>
-        <p>Graphic Design, Copywriting, Data Entry</p>
-      </div>
+    <section class="services" id="services">
+        <div class="container">
+            <h2>Our Services</h2>
+            <div class="service-cards">
+                <article class="service-card">
+                    <h3>Hourly Rentals</h3>
+                    <p>Choose the exact amount of time you need. No hidden fees.</p>
+                </article>
+                <article class="service-card">
+                    <h3>Full‑Day Packages</h3>
+                    <p>Enjoy a whole day on the water with unlimited mileage.</p>
+                </article>
+                <article class="service-card">
+                    <h3>Guided Tours (Optional)</h3>
+                    <p>Add a professional captain for a hassle‑free experience.</p>
+                </article>
+            </div>
+        </div>
     </section>
 
-    <section id="portfolio" class="section">
-      <div class="container">
-        <h2>Portfolio</h2>
-        <p>Sample works</p>
-      </div>
+    <section class="booking" id="booking">
+        <div class="container">
+            <h2>Book Your Boat</h2>
+            <form id="booking-form" novalidate>
+                <div class="form-group">
+                    <label for="name">Full Name</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone</label>
+                    <input type="tel" id="phone" name="phone" required>
+                </div>
+                <div class="form-group">
+                    <label for="date">Rental Date</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+                <div class="form-group">
+                    <label for="duration">Duration</label>
+                    <select id="duration" name="duration" required>
+                        <option value="">Select…</option>
+                        <option value="2">2 Hours</option>
+                        <option value="4">4 Hours</option>
+                        <option value="8">8 Hours</option>
+                        <option value="full">Full Day</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary">Submit Request</button>
+                <p class="form-message" id="form-message" aria-live="polite"></p>
+            </form>
+        </div>
     </section>
 
-    <section id="contact" class="section">
-      <div class="container">
-        <h2>Contact</h2>
-        <p>Contact me at <a href="mailto:email@example.com">email@example.com</a></p>
-      </div>
+    <section class="contact" id="contact">
+        <div class="container">
+            <h2>Contact Us</h2>
+            <p>Phone: <a href="tel:+1234567890">+1 (234) 567‑890</a></p>
+            <p>Email: <a href="mailto:info@boatgo.com">info@boatgo.com</a></p>
+            <p>Address: 123 Marina Way, Lakeside City</p>
+        </div>
     </section>
-  </main>
 
-  <footer>
-    <div class="container">
-      <p>&copy; 2026 Freelance Portfolio</p>
-    </div>
-  </footer>
+    <footer class="site-footer">
+        <div class="container">
+            <p>&copy; <span id="year"></span> BoatGo – Self‑Drive Boat Services. All rights reserved.</p>
+        </div>
+    </footer>
 
-  <script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
